@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Release</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css" rel="stylesheet">
+    <!-- Quill CSS -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="/js/modal.js"></script>
+    <style>
+        body { 
+            font-family: 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        main {
+            flex: 1;
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        .feature-editor {
+            height: 300px;
+            margin-bottom: 1rem;
+        }
+        /* Custom Quill styles */
+        .ql-container {
+            font-family: 'Roboto', sans-serif;
+            font-size: 16px;
+            height: 250px;
+        }
+        .ql-toolbar {
+            border-top-left-radius: 0.375rem;
+            border-top-right-radius: 0.375rem;
+        }
+        .ql-container {
+            border-bottom-left-radius: 0.375rem;
+            border-bottom-right-radius: 0.375rem;
+        }
+        .error-message {
+            color: #dc2626;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+        .input-error {
+            border-color: #dc2626;
+        }
+        @media (max-width: 640px) {
+            .ql-toolbar {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .ql-formats {
+                margin-bottom: 8px;
+            }
+        }
+        #loading-indicator {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9998;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="flex items-center space-x-3">
+        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+        <span class="text-gray-700">Loading...</span>
+    </div>
+
+    <!-- Admin Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <a href="/admin/releases/<%= product %>" class="text-gray-600 hover:text-gray-900 flex items-center">
+                        <i class="ri-arrow-left-line mr-2"></i>
+                        <span>Back</span>
+                    </a>
+                    <h1 class="text-xl font-semibold text-gray-800">Edit Release</h1>
+                </div>
+                    <form action="/admin/logout" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" 
+                                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 font-medium">
+                            Logout
+                        </button>
+                    </form>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-6 py-8">
+        <!-- Release Header -->
+        <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                    <input type="text" 
+                           id="version" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
+                           readonly>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Release Date</label>
+                    <input type="date" 
+                           id="releaseDate" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-600 focus:border-gray-600">
+                </div>
+            </div>
+        </div>
+
+        <!-- Features List -->
+        <div class="space-y-4 sm:space-y-6" id="features-container">
+            <!-- Features will be dynamically inserted here -->
+        </div>
+
+        <!-- Add Feature Button -->
+        <div class="flex justify-between items-center space-x-4 mt-8">
+            <button onclick="addNewFeature()" 
+                    class="bg-white border border-gray-300 text-gray-700 px-4 sm:px-6 py-2 rounded-md hover:bg-gray-50 flex items-center space-x-2 w-full sm:w-auto justify-center">
+                <i class="ri-add-line"></i>
+                <span>Add New Feature</span>
+            </button>
+           
+                <button onclick="saveAllChanges()" 
+                        class="bg-white border border-gray-300 text-gray-700 px-4 sm:px-6 py-2 rounded-md hover:bg-gray-50 flex items-center space-x-2 w-full sm:w-auto justify-center">
+                    <i class="ri-save-line mr-2"></i>
+                    <span>Save Changes</span>
+                </button>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-100">
+        <div class="container mx-auto px-4 sm:px-6 py-6">
+            <p class="text-center text-gray-500 text-sm">&copy; <%= new Date().getFullYear() %> BrandSystems. All Rights Reserved. Part of the Wellcom Worldwide Group.</p>
+        </div>
+    </footer>
+
+    <!-- Feature Editor Modal -->
+    <div id="feature-modal" class="modal fixed inset-0 z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl">
+            <div class="p-4 sm:p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-800">Edit Feature</h2>
+                <button onclick="closeFeatureModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="ri-close-line text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-4 sm:p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Feature Title</label>
+                    <input type="text" 
+                           id="feature-title" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-600 focus:border-gray-600"
+                           maxlength="200">
+                    <div class="text-xs text-gray-500 mt-1">
+                        <span id="title-char-count">0</span>/200 characters
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                    <div id="feature-editor" class="feature-editor"></div>
+                </div>
+            </div>
+
+            <div class="px-4 sm:px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-4">
+                <button onclick="closeFeatureModal()" 
+                        class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                    Cancel
+                </button>
+                <button onclick="saveFeature()" 
+                        class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-600/90">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <script>
+        // CSRF token
+        const csrfToken = '<%= csrfToken %>';
+
+        // Get product and version from URL path
+        const pathParts = window.location.pathname.split('/');
+        const product = pathParts[pathParts.length - 2];
+        const version = pathParts[pathParts.length - 1];
+
+        console.log('Product:', product);
+        console.log('Version:', version);
+
+        // Loading indicator functions
+        function showLoading() {
+            document.getElementById('loading-indicator').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-indicator').style.display = 'none';
+        }
+
+        // Character counter for title
+        document.getElementById('feature-title').addEventListener('input', function(e) {
+            const count = e.target.value.length;
+            document.getElementById('title-char-count').textContent = count;
+        });
+
+        // Utility function to show error message
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            const existingError = element.parentNode.querySelector('.error-message');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            element.classList.add('input-error');
+            element.parentNode.appendChild(errorDiv);
+        }
+
+        // Utility function to clear error message
+        function clearError(elementId) {
+            const element = document.getElementById(elementId);
+            const errorDiv = element.parentNode.querySelector('.error-message');
+            if (errorDiv) {
+                errorDiv.remove();
+            }
+            element.classList.remove('input-error');
+        }
+
+        // Utility function to handle API errors
+        async function handleApiResponse(response) {
+            const data = await response.json();
+            if (!response.ok) {
+                if (data.errors) {
+                    data.errors.forEach(error => {
+                        showError(error.param, error.msg);
+                    });
+                }
+                throw new Error(data.error || 'API request failed');
+            }
+            return data;
+        }
+
+        // Render features with sanitized content
+        function renderFeatures(features) {
+            console.log('Rendering features:', features);
+            const container = document.getElementById('features-container');
+            if (!features || features.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic">No features available for this release.</p>';
+                return;
+            }
+            
+            container.innerHTML = features.map((feature, index) => `
+                <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6" id="feature-${index}">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0 mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">${DOMPurify.sanitize(feature.title)}</h3>
+                        <div class="flex space-x-2">
+                            <button onclick="editFeature(${index})" 
+                                    class="text-gray-600 hover:text-gray-600">
+                                <i class="ri-edit-line"></i>
+                            </button>
+                            <button onclick="deleteFeature(${index})" 
+                                    class="text-gray-600 hover:text-gray-600">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none">${DOMPurify.sanitize(feature.content || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        // Store features data globally
+        let featuresData = [];
+
+        // Load release data with error handling
+        async function loadReleaseData() {
+            try {
+                showLoading();
+                console.log('Fetching release data for:', product, version);
+                const response = await fetch(`/api/releases/${product}/${version}`, {
+                    headers: {
+                        'CSRF-Token': csrfToken
+                    }
+                });
+                const data = await handleApiResponse(response);
+                console.log('Received release data:', data);
+                
+                // Access the nested release data
+                document.getElementById('version').value = data.release.version;
+                document.getElementById('releaseDate').value = data.release.date;
+                
+                // Store features data globally
+                featuresData = data.release.features || [];
+                
+                // Access the features array from the nested release object
+                renderFeatures(featuresData);
+            } catch (error) {
+                console.error('Error loading release data:', error);
+                alert('Failed to load release data: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function editFeature(index) {
+            try {
+                const feature = featuresData[index];
+                if (!feature) {
+                    throw new Error('Feature not found');
+                }
+                
+                currentFeatureId = index;
+                openFeatureModal(feature.title, feature.content);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load feature data: ' + error.message);
+            }
+        }
+
+        async function deleteFeature(index) {
+            const confirmed = await modal.confirm('Are you sure you want to delete this feature?');
+            if (!confirmed) return;
+
+            try {
+                showLoading();
+                const feature = featuresData[index];
+                if (!feature) {
+                    throw new Error('Feature not found');
+                }
+
+                // Remove the feature from the array
+                featuresData.splice(index, 1);
+                
+                // Re-render the features
+                renderFeatures(featuresData);
+                
+                // Save the updated features
+                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        date: document.getElementById('releaseDate').value,
+                        features: featuresData
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to delete feature');
+                }
+
+                await handleApiResponse(response);
+                await modal.alert('Feature deleted successfully');
+            } catch (error) {
+                console.error('Error:', error);
+                await modal.alert('Failed to delete feature: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Feature modal functions with validation
+        function validateFeatureForm() {
+            let isValid = true;
+            const title = document.getElementById('feature-title').value.trim();
+            const content = quill.root.innerHTML.trim();
+
+            console.log('Validating feature form:', { title, content });
+
+            clearError('feature-title');
+
+            if (!title) {
+                showError('feature-title', 'Title is required');
+                isValid = false;
+            } else if (title.length > 200) {
+                showError('feature-title', 'Title is too long (max 200 characters)');
+                isValid = false;
+            }
+
+            if (!content) {
+                alert('Content is required');
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        async function saveFeature() {
+            if (!validateFeatureForm()) {
+                return;
+            }
+
+            const title = document.getElementById('feature-title').value.trim();
+            const content = quill.root.innerHTML;
+
+            try {
+                showLoading();
+                
+                if (currentFeatureId !== null) {
+                    // Update existing feature
+                    featuresData[currentFeatureId] = { title, content };
+                } else {
+                    // Add new feature
+                    featuresData.push({ title, content });
+                }
+                
+                // Save the updated features
+                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        date: document.getElementById('releaseDate').value,
+                        features: featuresData
+                    })
+                });
+
+                if (response.status === 401) {
+                    // Authentication required - redirect to login
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save changes');
+                }
+
+                await handleApiResponse(response);
+                closeFeatureModal();
+                renderFeatures(featuresData);
+                await modal.alert('Feature saved successfully');
+            } catch (error) {
+                console.error('Error saving feature:', error);
+                await modal.alert('Failed to save feature: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        let currentFeatureId = null;
+
+        // Feature modal functions
+        function openFeatureModal(title = '', content = '') {
+            document.getElementById('feature-modal').classList.remove('hidden');
+            document.getElementById('feature-title').value = title;
+            document.getElementById('title-char-count').textContent = title.length;
+            quill.root.innerHTML = content;
+        }
+
+        function closeFeatureModal() {
+            document.getElementById('feature-modal').classList.add('hidden');
+            currentFeatureId = null;
+            clearError('feature-title');
+        }
+
+        function addNewFeature() {
+            currentFeatureId = null;
+            openFeatureModal();
+        }
+
+        async function saveAllChanges() {
+            const date = document.getElementById('releaseDate').value;
+
+            try {
+                showLoading();
+                clearError('releaseDate');
+                
+                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({ 
+                        date,
+                        features: featuresData 
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save changes');
+                }
+
+                await handleApiResponse(response);
+                await modal.alert('All changes saved successfully');
+            } catch (error) {
+                console.error('Error:', error);
+                await modal.alert('Failed to save changes: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Initialize Quill with image upload handling
+        const quill = new Quill('#feature-editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image', 'video'],
+                    ['clean']
+                ]
+            }
+        });
+
+        console.log('Quill editor initialized');
+
+        // Handle image upload
+        quill.getModule('toolbar').addHandler('image', () => {
+            const input = document.createElement('input');
+            input.setAttribute('type', 'file');
+            input.setAttribute('accept', 'image/*');
+            input.click();
+
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (file) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('image', file);
+
+                        const range = quill.getSelection(true);
+                        quill.insertEmbed(range.index, 'image', '/images/uploading.gif');
+
+                        const response = await fetch('/admin/api/upload-image', {
+                            method: 'POST',
+                            headers: {
+                                'CSRF-Token': csrfToken
+                            },
+                            body: formData
+                        });
+
+                        const result = await handleApiResponse(response);
+                        console.log('Image upload response:', result);
+
+                        if (!result || !result.url) {
+                            throw new Error('Invalid response from server: missing image URL');
+                        }
+
+                        // Remove the loading image
+                        quill.deleteText(range.index, 1);
+                        // Insert the actual image
+                        quill.insertEmbed(range.index, 'image', result.url);
+                    } catch (error) {
+                        console.error('Upload failed:', error);
+                        // Remove the loading image if there was an error
+                        quill.deleteText(range.index, 1);
+                        alert('Image upload failed: ' + error.message);
+                    }
+                }
+            };
+        });
+
+        // Load initial data
+        loadReleaseData();
+
+        // Handle escape key to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeFeatureModal();
+            }
+        });
+
+        // Handle click outside modal to close
+        document.getElementById('feature-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeFeatureModal();
+            }
+        });
+    </script>
+</body>
+</html> 

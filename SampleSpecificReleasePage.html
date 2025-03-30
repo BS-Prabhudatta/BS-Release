@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Notes v2.5.0</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css" rel="stylesheet">
+<script>tailwind.config={theme:{extend:{colors:{primary:'#000000',secondary:'#64748B'},borderRadius:{'none':'0px','sm':'4px',DEFAULT:'8px','md':'12px','lg':'16px','xl':'20px','2xl':'24px','3xl':'32px','full':'9999px','button':'8px'}}}}</script>
+<style>
+:where([class^="ri-"])::before { content: "\f3c2"; }
+body { font-family: 'Roboto', sans-serif; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="container mx-auto p-6">
+<nav class="flex items-center mb-8">
+<a href="/releases" class="flex items-center text-gray-600 hover:text-gray-900 cursor-pointer">
+<i class="ri-arrow-left-line mr-2"></i>
+<span>Back to Releases</span>
+</a>
+</nav>
+<header class="mb-12">
+<h1 class="text-3xl font-bold text-gray-900 mb-2">Version 2.5.0</h1>
+<div class="text-lg text-gray-600">March 27, 2025</div>
+</header>
+<div class="space-y-12">
+<section class="bg-white rounded-lg p-8 shadow-sm">
+<h2 class="text-xl font-semibold text-gray-800 mb-6">Enhanced performance optimization for large datasets</h2>
+<div class="space-y-8">
+<p class="text-gray-700 leading-relaxed">
+Our latest update introduces significant performance improvements for handling large datasets. We've completely rewritten our data processing engine to utilize multi-threading capabilities, resulting in up to 70% faster loading times for datasets exceeding 100,000 records.
+</p>
+<p class="text-gray-700 leading-relaxed">
+The new architecture implements advanced caching mechanisms and optimized memory management, allowing for smoother scrolling and filtering operations even with millions of data points. Users working with time-series data or complex analytical models will notice dramatic improvements in responsiveness.
+</p>
+<p class="text-gray-700 leading-relaxed">
+Additionally, we've added intelligent data compression algorithms that reduce memory footprint while maintaining data integrity. This means you can now work with substantially larger datasets without experiencing performance degradation or system slowdowns.</p>
+<div class="mt-8 rounded-lg overflow-hidden shadow-md">
+<img src="https://public.readdy.ai/ai/img_res/a0fc5f7249465d135e322485aa06511a.jpg" alt="Performance optimization dashboard" class="w-full h-auto object-cover object-top">
+</div>
+</div>
+</section>
+<section class="bg-white rounded-lg p-8 shadow-sm mt-8">
+<h2 class="text-xl font-semibold text-gray-800 mb-6">Redesigned user interface with customizable dashboards</h2>
+<div class="space-y-8">
+<p class="text-gray-700 leading-relaxed">
+We're excited to introduce our completely redesigned user interface that focuses on simplicity and productivity. The new dashboard system allows for complete customization, enabling users to create personalized workspaces tailored to their specific workflows.
+</p>
+<p class="text-gray-700 leading-relaxed">
+Each dashboard can now contain multiple widget types, including real-time charts, KPI indicators, and data tables. Users can resize, reposition, and configure these widgets through an intuitive drag-and-drop interface, making it easier than ever to visualize complex data relationships.
+</p>
+<p class="text-gray-700 leading-relaxed">
+We've also implemented a new theming engine that supports both light and dark modes, along with custom color schemes to match your brand identity. The responsive design ensures a consistent experience across desktop, tablet, and mobile devices.
+</p>
+<div class="mt-8 rounded-lg overflow-hidden shadow-md">
+<img src="https://public.readdy.ai/ai/img_res/5897575167dcdffff7218c30e3560c89.jpg" alt="Customizable dashboard interface" class="w-full h-auto object-cover object-top">
+</div>
+</div>
+</section>
+</div>
+<footer class="mt-12 pt-8 border-t border-gray-200">
+<div class="flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="text-gray-600">
+Need help? Contact our <a href="#" class="text-primary hover:underline cursor-pointer">support team</a>
+</div>
+<div class="flex items-center gap-4">
+<a href="#" class="text-gray-600 hover:text-gray-900 cursor-pointer">
+<i class="ri-github-line text-xl"></i>
+</a>
+<a href="#" class="text-gray-600 hover:text-gray-900 cursor-pointer">
+<i class="ri-twitter-line text-xl"></i>
+</a>
+<a href="#" class="text-gray-600 hover:text-gray-900 cursor-pointer">
+<i class="ri-discord-line text-xl"></i>
+</a>
+</div>
+</div>
+</footer>
+</div>
+</body>
+</html>

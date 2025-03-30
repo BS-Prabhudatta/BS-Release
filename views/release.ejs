@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= product.name %> v<%= release.version %></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
+        .prose img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+        }
+        .prose iframe {
+            width: 100%;
+            aspect-ratio: 16/9;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 sm:px-6 py-4">
+            <nav class="flex items-center space-x-4">
+                <a href="/releases/<%= product.slug %>" class="text-gray-600 hover:text-gray-900">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold text-gray-900">
+                    <%= product.name %> - Version <%= release.version %>
+                </h1>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 py-8">
+        <div class="max-w-4xl mx-auto">
+            <!-- Release Header Card -->
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-900">Version <%= release.version %></h2>
+                        <p class="text-gray-500 mt-1">
+                            Released on <%= new Date(release.release_date).toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            }) %>
+                        </p>
+                    </div>
+                </div>
+                <p class="text-gray-600"><%= product.description %></p>
+            </div>
+
+            <!-- Features Section -->
+            <div class="space-y-6">
+                <h3 class="text-2xl font-semibold text-gray-900 mb-6">What's New</h3>
+                <div class="grid gap-6">
+                    <% release.features.forEach(feature => { %>
+                        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                            <div class="p-6">
+                                <h4 class="text-xl font-semibold text-gray-900 mb-4">
+                                    <%= feature.title %>
+                                </h4>
+                                <div class="prose prose-lg max-w-none text-gray-600">
+                                    <%- feature.content %>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-100">
+        <div class="container mx-auto px-4 sm:px-6 py-6">
+            <p class="text-center text-gray-500 text-sm">&copy; <%= new Date().getFullYear() %> BrandSystems. All Rights Reserved. Part of the Wellcom Worldwide Group.</p>
+        </div>
+    </footer>
+</body>
+</html> 
