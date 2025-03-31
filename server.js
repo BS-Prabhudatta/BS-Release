@@ -7,11 +7,7 @@ const session = require('express-session');
 
 // Import database connection and routes
 const { db, initPromise } = require('./db/init');
-const releasesRouter = require('./routes/releases');
-const adminRouter = require('./routes/admin');
-const { requireAuth } = require('./middleware/auth');
-const apiRoutes = require('./routes/api');
-const indexRoutes = require('./routes/index');
+const routes = require('./routes');
 
 const app = express();
 const port = 3000;
@@ -50,192 +46,39 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-// Mount API routes first
-app.use('/api', apiRoutes);
-
-// Mount index routes
-app.use('/', indexRoutes);
-
-// Routes
-app.get('/', (req, res) => {
-    db.all('SELECT * FROM products ORDER BY name', [], (err, products) => {
-        if (err) {
-            console.error('Error fetching products:', err);
-            return res.status(500).render('error', { 
-                message: 'Failed to load products' 
-            });
-        }
-        res.render('index', { products });
-    });
-});
-
-// Releases page route
-app.get('/releases/:product', (req, res) => {
-    const productSlug = req.params.product;
-
-    // First, get the product details
-    db.get('SELECT * FROM products WHERE slug = ?', [productSlug], (err, product) => {
-        if (err) {
-            console.error('Error fetching product:', err);
-            return res.status(500).render('error', { message: 'Failed to load product' });
-        }
-        
-        if (!product) {
-            return res.status(404).render('error', { message: 'Product not found' });
-        }
-
-        // Then, get all releases for this product with their features
-        db.all(`
-            SELECT 
-                r.id as release_id,
-                r.version,
-                r.release_date,
-                f.id as feature_id,
-                f.title as feature_title,
-                f.content as feature_content
-            FROM releases r
-            LEFT JOIN features f ON f.release_id = r.id
-            WHERE r.product_id = ?
-            ORDER BY r.release_date DESC, r.version DESC
-        `, [product.id], (err, rows) => {
-            if (err) {
-                console.error('Error fetching releases:', err);
-                return res.status(500).render('error', { message: 'Failed to load releases' });
-            }
-
-            // Group features by release
-            const releases = rows.reduce((acc, row) => {
-                if (!acc[row.release_id]) {
-                    acc[row.release_id] = {
-                        version: row.version,
-                        release_date: row.release_date,
-                        features: []
-                    };
-                }
-                if (row.feature_id) {
-                    acc[row.release_id].features.push({
-                        title: row.feature_title,
-                        content: row.feature_content
-                    });
-                }
-                return acc;
-            }, {});
-
-            // Convert to array and sort by version
-            const releasesArray = Object.values(releases);
-
-            res.render('releases', { 
-                product,
-                releases: releasesArray
-            });
-        });
-    });
-});
-
-// Specific release page route
-app.get('/release/:product/:version', (req, res) => {
-    const productSlug = req.params.product;
-    const version = req.params.version;
-
-    // First, get the product details
-    db.get('SELECT * FROM products WHERE slug = ?', [productSlug], (err, product) => {
-        if (err) {
-            console.error('Error fetching product:', err);
-            return res.status(500).render('error', { message: 'Failed to load product' });
-        }
-        
-        if (!product) {
-            return res.status(404).render('error', { message: 'Product not found' });
-        }
-
-        // Then, get the specific release and its features
-        db.get(`
-            SELECT 
-                r.id as release_id,
-                r.version,
-                r.release_date
-            FROM releases r
-            WHERE r.product_id = ? AND r.version = ?
-        `, [product.id, version], (err, release) => {
-            if (err) {
-                console.error('Error fetching release:', err);
-                return res.status(500).render('error', { message: 'Failed to load release' });
-            }
-
-            if (!release) {
-                return res.status(404).render('error', { message: 'Release not found' });
-            }
-
-            // Get features for this release
-            db.all(`
-                SELECT id, title, content
-                FROM features
-                WHERE release_id = ?
-                ORDER BY id
-            `, [release.release_id], (err, features) => {
-                if (err) {
-                    console.error('Error fetching features:', err);
-                    return res.status(500).render('error', { message: 'Failed to load features' });
-                }
-
-                release.features = features;
-                res.render('release', { 
-                    product,
-                    release
-                });
-            });
-        });
-    });
-});
-
-// Admin routes
-app.use('/admin', adminRouter);
-
-// Example route to test database connection
-app.get('/api/releases', (req, res) => {
-    db.all('SELECT * FROM releases', [], (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        res.json(rows);
-    });
-});
+// Mount all routes
+app.use('/', routes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    if (err.code === 'EBADCSRFTOKEN') {
-        // Handle CSRF token errors
-        return res.status(403).render('error', { 
-            message: 'Invalid form submission. Please try again.' 
+    console.error(err.stack);
+    
+    // If it's an API request, return JSON error
+    if (req.path.startsWith('/api/')) {
+        return res.status(500).json({ 
+            error: 'An unexpected error occurred',
+            message: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something broke!' });
+    
+    // For web requests, render error page
+    res.status(500).render('error', { 
+        message: 'An unexpected error occurred',
+        error: process.env.NODE_ENV === 'development' ? err : {}
+    });
 });
 
-// Start server
+// Start server after database initialization
 const startServer = async () => {
     try {
-        // Wait for database initialization
         await initPromise;
+        console.log('Database initialized successfully');
         
-        // Verify database connection
-        await new Promise((resolve) => {
-            db.get('SELECT 1', (err) => {
-                if (err) {
-                    console.error('Database connection error:', err);
-                    process.exit(1);
-                }
-                resolve();
-            });
-        });
-
         app.listen(port, () => {
-            console.log(`Server is running on http://localhost:${port}`);
+            console.log(`Server running at http://localhost:${port}`);
         });
-    } catch (err) {
-        console.error('Failed to start server:', err);
+    } catch (error) {
+        console.error('Failed to initialize database:', error);
         process.exit(1);
     }
 };

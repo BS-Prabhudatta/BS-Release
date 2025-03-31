@@ -1,33 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/init');
+const { db } = require('../../db/init');
 
-const adminRoutes = require('./admin');
-const apiRoutes = require('./api');
-const publicRoutes = require('./public');
-
-// Mount admin routes
-router.use('/admin', adminRoutes);
-
-// Mount API routes
-router.use('/api', apiRoutes);
-
-// Mount public routes (these should be last as they're the most general)
-router.use('/', publicRoutes);
-
-// Home page - List all products
-router.get('/', (req, res) => {
-    db.all('SELECT * FROM products ORDER BY name', [], (err, products) => {
-        if (err) {
-            console.error('Error fetching products:', err);
-            return res.status(500).render('error', { message: 'Failed to load products' });
-        }
-        res.render('index', { products });
-    });
-});
-
-// Product releases page
-router.get('/releases/:product', (req, res) => {
+// Get all releases for a product
+router.get('/:product', (req, res) => {
     const { product } = req.params;
     
     // First, verify the product exists
@@ -41,7 +17,7 @@ router.get('/releases/:product', (req, res) => {
             return res.status(404).render('error', { message: 'Product not found' });
         }
 
-        // Get all releases with their features for this product
+        // Get all releases with their features
         db.all(`
             SELECT 
                 r.id as release_id,
@@ -77,8 +53,8 @@ router.get('/releases/:product', (req, res) => {
     });
 });
 
-// Specific release page
-router.get('/releases/:product/:version', (req, res) => {
+// Get specific release
+router.get('/:product/:version', (req, res) => {
     const { product, version } = req.params;
 
     db.get(`
@@ -120,25 +96,6 @@ router.get('/releases/:product/:version', (req, res) => {
                 }
             });
         });
-    });
-});
-
-// Global error handler
-router.use((err, req, res, next) => {
-    console.error(err.stack);
-    
-    // If it's an API request, return JSON error
-    if (req.path.startsWith('/api/')) {
-        return res.status(500).json({ 
-            error: 'An unexpected error occurred',
-            message: process.env.NODE_ENV === 'development' ? err.message : undefined
-        });
-    }
-    
-    // For web requests, render error page
-    res.status(500).render('error', { 
-        message: 'An unexpected error occurred',
-        error: process.env.NODE_ENV === 'development' ? err : {}
     });
 });
 

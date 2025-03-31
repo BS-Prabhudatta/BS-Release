@@ -142,7 +142,7 @@
 
             <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-4">
                 <button onclick="closeModal()" 
-                        class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                        class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center w-full sm:w-auto justify-center">
                     Cancel
                 </button>
                 <button onclick="submitRelease()" 
@@ -213,7 +213,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                        'X-CSRF-Token': document.querySelector('input[name="_csrf"]').value
                     },
                     body: JSON.stringify({
                         product,
@@ -228,7 +228,7 @@
                 }
 
                 // Redirect to the new release page
-                window.location.href = `/admin/release/${product}/${version}`;
+                window.location.href = `/admin/releases/${product}/${version}`;
             } catch (error) {
                 console.error('Error:', error);
                 await modal.alert('Failed to create release. Please try again.');
@@ -246,7 +246,7 @@
                             <li>${feature.title}</li>
                         `).join('')}
                     </ul>
-                    <a href="/admin/release/${product}/${release.version}" 
+                    <a href="/admin/releases/${product}/${release.version}" 
                        class="block mt-4 text-gray-600 hover:text-black underline">
                         For the complete release note click here
                     </a>

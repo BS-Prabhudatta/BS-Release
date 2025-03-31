@@ -183,7 +183,7 @@
 
             <div class="px-4 sm:px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-4">
                 <button onclick="closeFeatureModal()" 
-                        class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                        class="bg-white border border-gray-300 text-gray-700 px-4 sm:px-6 py-2 rounded-md hover:bg-gray-50 flex items-center w-full sm:w-auto justify-center">
                     Cancel
                 </button>
                 <button onclick="saveFeature()" 
@@ -300,7 +300,7 @@
             try {
                 showLoading();
                 console.log('Fetching release data for:', product, version);
-                const response = await fetch(`/api/releases/${product}/${version}`, {
+                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
                     headers: {
                         'CSRF-Token': csrfToken
                     }
@@ -309,11 +309,11 @@
                 console.log('Received release data:', data);
                 
                 // Access the nested release data
-                document.getElementById('version').value = data.release.version;
-                document.getElementById('releaseDate').value = data.release.date;
+                document.getElementById('version').value = data.version;
+                document.getElementById('releaseDate').value = data.release_date;
                 
                 // Store features data globally
-                featuresData = data.release.features || [];
+                featuresData = data.features || [];
                 
                 // Access the features array from the nested release object
                 renderFeatures(featuresData);
@@ -554,7 +554,7 @@
                         const range = quill.getSelection(true);
                         quill.insertEmbed(range.index, 'image', '/images/uploading.gif');
 
-                        const response = await fetch('/admin/api/upload-image', {
+                        const response = await fetch('/api/uploads/image', {
                             method: 'POST',
                             headers: {
                                 'CSRF-Token': csrfToken
