@@ -3,7 +3,15 @@
 # Exit on error
 set -e
 
+# Configuration
+IP_ADDRESS="13.212.229.193"
+DOMAIN="release.brandsystems.com"
+APP_DIR="/var/www/release.brandsystems.com"
+
 echo "Starting deployment process for AWS Lightsail..."
+echo "IP Address: $IP_ADDRESS"
+echo "Domain: $DOMAIN"
+echo "Application Directory: $APP_DIR"
 
 # Update system
 echo "Updating system packages..."
@@ -30,14 +38,14 @@ sudo npm install -g pm2 tailwindcss --no-progress
 
 # Create application directory
 echo "Setting up application directory..."
-sudo mkdir -p /var/www/release.brandsystems.com
-sudo chown -R ubuntu:ubuntu /var/www/release.brandsystems.com
+sudo mkdir -p $APP_DIR
+sudo chown -R ubuntu:ubuntu $APP_DIR
 
 # Navigate to application directory
-cd /var/www/release.brandsystems.com
+cd $APP_DIR
 
 # Clone or pull latest code
-if [ -d "/var/www/release.brandsystems.com/.git" ]; then
+if [ -d "$APP_DIR/.git" ]; then
     echo "Updating existing repository..."
     git pull
 else
@@ -101,21 +109,31 @@ if [ ! -f "nginx.conf" ]; then
     echo "Error: nginx.conf not found in repository"
     exit 1
 fi
-sudo cp nginx.conf /etc/nginx/sites-available/release.brandsystems.com
-sudo ln -sf /etc/nginx/sites-available/release.brandsystems.com /etc/nginx/sites-enabled/
+sudo cp nginx.conf /etc/nginx/sites-available/$DOMAIN
+sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
+sudo nginx -t && sudo systemctl restart nginx
 
-# Setup SSL certificate
-echo "Setting up SSL certificate..."
-sudo certbot --nginx -d release.brandsystems.com --non-interactive --agree-tos --email your-email@example.com
+# Ensure environment variables are set
+echo "Setting up environment variables..."
+if [ ! -f ".env" ]; then
+    echo "Creating .env file..."
+    cat > .env <<EOL
+PORT=3000
+NODE_ENV=production
+EOL
+fi
 
 # Start application with PM2
 echo "Starting application with PM2..."
 pm2 delete bs-release 2>/dev/null || true
-pm2 start ecosystem.config.js --env production
+NODE_ENV=production pm2 start server.js --name bs-release
 pm2 save
+
+# Verify application is running
+echo "Verifying application status..."
+pm2 list
+curl -I http://localhost:3000 || echo "Warning: Application not responding on port 3000"
 
 # Setup PM2 startup script
 echo "Setting up PM2 startup script..."
@@ -134,7 +152,10 @@ fi
 
 # Display useful information
 echo "Deployment completed successfully!"
-echo "Your application should now be running at https://release.brandsystems.com"
+echo ""
+echo "Your application should now be accessible at:"
+echo "http://$IP_ADDRESS"
+echo "http://$DOMAIN (once DNS is configured)"
 echo ""
 echo "Useful commands:"
 echo "- View application status: pm2 status"
@@ -142,4 +163,9 @@ echo "- View application logs: pm2 logs"
 echo "- Monitor resources: pm2 monit"
 echo "- View Nginx logs: sudo tail -f /var/log/nginx/error.log"
 echo "- Restart application: pm2 restart bs-release"
-echo "- Restart Nginx: sudo systemctl restart nginx" 
+echo "- Restart Nginx: sudo systemctl restart nginx"
+
+echo ""
+echo "Next steps:"
+echo "1. Configure your DNS to point $DOMAIN to $IP_ADDRESS"
+echo "2. Once DNS is configured, run: sudo certbot --nginx -d $DOMAIN" 
