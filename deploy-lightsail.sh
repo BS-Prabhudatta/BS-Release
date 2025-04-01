@@ -19,6 +19,10 @@ if ! command -v node &> /dev/null; then
     sudo dnf install nodejs -y
 fi
 
+# Update npm to latest version
+echo "Updating npm..."
+sudo npm install -g npm@latest
+
 # Install PM2 globally if not already installed
 if ! command -v pm2 &> /dev/null; then
     echo "Installing PM2..."
@@ -43,14 +47,37 @@ echo "Setting up permissions..."
 sudo chown -R ec2-user:ec2-user $APP_DIR
 chmod -R 755 $APP_DIR
 
-# Install dependencies
+# Install dependencies (including dev dependencies for build)
 echo "Installing dependencies..."
 cd $APP_DIR
-npm install --production
+npm install
+
+# Install Tailwind CSS globally
+echo "Installing Tailwind CSS globally..."
+sudo npm install -g tailwindcss
+
+# Create Tailwind CSS config if it doesn't exist
+if [ ! -f "tailwind.config.js" ]; then
+    echo "Initializing Tailwind CSS config..."
+    tailwindcss init
+fi
+
+# Ensure public/css directory exists
+mkdir -p public/css
+
+# Create input.css if it doesn't exist
+if [ ! -f "public/css/input.css" ]; then
+    echo "Creating default Tailwind CSS input file..."
+    cat > public/css/input.css << EOF
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+EOF
+fi
 
 # Build CSS
 echo "Building CSS..."
-npm run build
+tailwindcss -i ./public/css/input.css -o ./public/css/output.css
 
 # Create logs directory
 echo "Setting up logs directory..."
