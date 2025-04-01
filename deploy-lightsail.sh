@@ -49,14 +49,14 @@ echo "Installing dependencies..."
 cd $APP_DIR
 npm install --no-audit
 
-# Install Tailwind CSS globally
-echo "Installing Tailwind CSS globally..."
-sudo npm install -g tailwindcss
+# Install Tailwind CSS locally in the project
+echo "Installing Tailwind CSS..."
+npm install tailwindcss --save-dev
 
 # Create Tailwind CSS config if it doesn't exist
 if [ ! -f "tailwind.config.js" ]; then
     echo "Initializing Tailwind CSS config..."
-    tailwindcss init
+    npx tailwindcss init
 fi
 
 # Ensure public/css directory exists
@@ -74,7 +74,7 @@ fi
 
 # Build CSS
 echo "Building CSS..."
-tailwindcss -i ./public/css/input.css -o ./public/css/output.css
+npx tailwindcss -i ./public/css/input.css -o ./public/css/output.css
 
 # Create logs directory
 echo "Setting up logs directory..."
