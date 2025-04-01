@@ -3,161 +3,87 @@
 # Exit on error
 set -e
 
-echo "Starting AWS Lightsail deployment process for Amazon Linux 2023..."
+echo "Starting deployment process for AWS Lightsail..."
 
 # Update system
 echo "Updating system packages..."
-sudo dnf update -y
+sudo apt update && sudo apt upgrade -y
 
-# Install development tools
-echo "Installing development tools..."
-sudo dnf groupinstall "Development Tools" -y
+# Install required packages
+echo "Installing required packages..."
+sudo apt install -y nginx certbot python3-certbot-nginx
 
-# Install Node.js 20 if not already installed
-if ! command -v node &> /dev/null || [ "$(node -v | cut -d. -f1)" != "v20" ]; then
-    echo "Installing Node.js 20..."
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-    sudo dnf install -y nodejs
+# Install Node.js
+echo "Installing Node.js..."
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install PM2 globally
+echo "Installing PM2..."
+sudo npm install -g pm2
+
+# Create application directory
+echo "Setting up application directory..."
+sudo mkdir -p /var/www/release.brandsystems.com
+sudo chown -R $USER:$USER /var/www/release.brandsystems.com
+
+# Clone or pull latest code
+if [ -d "/var/www/release.brandsystems.com/.git" ]; then
+    echo "Updating existing repository..."
+    cd /var/www/release.brandsystems.com
+    git pull
+else
+    echo "Cloning repository..."
+    git clone https://github.com/yourusername/bs-release.git /var/www/release.brandsystems.com
+    cd /var/www/release.brandsystems.com
 fi
 
-# Install PM2 globally if not already installed
-if ! command -v pm2 &> /dev/null; then
-    echo "Installing PM2..."
-    sudo npm install -g pm2
-fi
-
-# Install Nginx if not already installed
-if ! command -v nginx &> /dev/null; then
-    echo "Installing Nginx..."
-    sudo dnf install nginx -y
-fi
-
-# Create application directory if it doesn't exist
-APP_DIR="/home/ec2-user/BS-Release"
-if [ ! -d "$APP_DIR" ]; then
-    echo "Creating application directory..."
-    mkdir -p $APP_DIR
-fi
-
-# Set proper permissions
-echo "Setting up permissions..."
-sudo chown -R ec2-user:ec2-user $APP_DIR
-chmod -R 755 $APP_DIR
-
-# Install dependencies (including dev dependencies for build)
+# Install dependencies
 echo "Installing dependencies..."
-cd $APP_DIR
-npm install --no-audit
-
-# Install Tailwind CSS locally in the project
-echo "Installing Tailwind CSS..."
-npm install tailwindcss --save-dev
-
-# Create Tailwind CSS config if it doesn't exist
-if [ ! -f "tailwind.config.js" ]; then
-    echo "Initializing Tailwind CSS config..."
-    npx tailwindcss init
-fi
-
-# Ensure public/css directory exists
-mkdir -p public/css
-
-# Create input.css if it doesn't exist
-if [ ! -f "public/css/input.css" ]; then
-    echo "Creating default Tailwind CSS input file..."
-    cat > public/css/input.css << EOF
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-EOF
-fi
+npm install --production
 
 # Build CSS
 echo "Building CSS..."
-npx tailwindcss -i ./public/css/input.css -o ./public/css/output.css
+npm run build
 
-# Create logs directory
-echo "Setting up logs directory..."
-mkdir -p $APP_DIR/logs
-chmod 755 $APP_DIR/logs
+# Create required directories
+echo "Creating required directories..."
+mkdir -p logs
+mkdir -p public/uploads
 
-# Configure SELinux for Nginx (if enabled)
-echo "Configuring SELinux..."
-if command -v sestatus &> /dev/null && sestatus | grep -q "SELinux status: *enabled"; then
-    sudo setsebool -P httpd_can_network_connect 1
-    sudo semanage port -a -t http_port_t -p tcp 3000 || true
-fi
+# Set proper permissions
+echo "Setting permissions..."
+sudo chown -R $USER:$USER .
+sudo chmod -R 755 public
+sudo chmod -R 755 db
+sudo chmod -R 755 logs
 
 # Configure Nginx
 echo "Configuring Nginx..."
-sudo tee /etc/nginx/conf.d/BS-Release.conf << EOF
-server {
-    listen 80;
-    server_name _;  # Replace with your domain
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-
-    location /uploads {
-        alias $APP_DIR/public/uploads;
-    }
-}
-EOF
-
-# Remove default Nginx configuration if it exists
-sudo rm -f /etc/nginx/conf.d/default.conf
-
-# Test Nginx configuration
-echo "Testing Nginx configuration..."
+sudo cp nginx.conf /etc/nginx/sites-available/release.brandsystems.com
+sudo ln -sf /etc/nginx/sites-available/release.brandsystems.com /etc/nginx/sites-enabled/
 sudo nginx -t
+sudo systemctl restart nginx
 
-# Start and enable Nginx service
-echo "Starting Nginx service..."
-sudo systemctl enable nginx
-sudo systemctl start nginx
+# Setup SSL certificate
+echo "Setting up SSL certificate..."
+sudo certbot --nginx -d release.brandsystems.com --non-interactive --agree-tos --email your-email@example.com
 
-# Start the application with PM2
+# Start application with PM2
 echo "Starting application with PM2..."
-cd $APP_DIR
+pm2 delete bs-release 2>/dev/null || true
 pm2 start ecosystem.config.js --env production
-
-# Save PM2 process list
-echo "Saving PM2 process list..."
 pm2 save
 
 # Setup PM2 startup script
 echo "Setting up PM2 startup script..."
-sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
-
-# Setup firewall rules
-echo "Configuring firewall..."
-if command -v firewall-cmd &> /dev/null; then
-    sudo firewall-cmd --permanent --add-service=http
-    sudo firewall-cmd --permanent --add-service=https
-    sudo firewall-cmd --permanent --add-port=3000/tcp
-    sudo firewall-cmd --reload
-fi
+pm2 startup ubuntu
+sudo env PATH=$PATH:/usr/bin pm2 startup ubuntu -u $USER --hp /home/$USER
 
 echo "Deployment completed successfully!"
+echo "Your application should now be running at https://release.brandsystems.com"
 echo ""
-echo "Next steps:"
-echo "1. Configure your domain in Nginx configuration at /etc/nginx/conf.d/BS-Release.conf"
-echo "2. Install and configure SSL certificate"
-echo "3. Check application status: pm2 status"
-echo "4. View logs: pm2 logs"
-echo ""
-echo "Common commands:"
-echo "- Restart application: pm2 restart BS-Release"
-echo "- View logs: pm2 logs"
-echo "- Monitor resources: pm2 monit"
-echo "- Restart Nginx: sudo systemctl restart nginx"
-echo "- View Nginx logs: sudo tail -f /var/log/nginx/error.log" 
+echo "You can:"
+echo "- Check application status with: pm2 status"
+echo "- View logs with: pm2 logs"
+echo "- Monitor resources with: pm2 monit" 
