@@ -13,15 +13,12 @@ sudo dnf update -y
 echo "Installing development tools..."
 sudo dnf groupinstall "Development Tools" -y
 
-# Install Node.js and npm if not already installed
-if ! command -v node &> /dev/null; then
-    echo "Installing Node.js..."
-    sudo dnf install nodejs -y
+# Install Node.js 20 if not already installed
+if ! command -v node &> /dev/null || [ "$(node -v | cut -d. -f1)" != "v20" ]; then
+    echo "Installing Node.js 20..."
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+    sudo dnf install -y nodejs
 fi
-
-# Update npm to latest version
-echo "Updating npm..."
-sudo npm install -g npm@latest
 
 # Install PM2 globally if not already installed
 if ! command -v pm2 &> /dev/null; then
@@ -50,7 +47,7 @@ chmod -R 755 $APP_DIR
 # Install dependencies (including dev dependencies for build)
 echo "Installing dependencies..."
 cd $APP_DIR
-npm install
+npm install --no-audit
 
 # Install Tailwind CSS globally
 echo "Installing Tailwind CSS globally..."
