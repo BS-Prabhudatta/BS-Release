@@ -3,17 +3,20 @@
 # Exit on error
 set -e
 
-echo "Starting AWS Lightsail deployment process..."
+echo "Starting AWS Lightsail deployment process for Amazon Linux 2023..."
 
 # Update system
 echo "Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+sudo dnf update -y
+
+# Install development tools
+echo "Installing development tools..."
+sudo dnf groupinstall "Development Tools" -y
 
 # Install Node.js and npm if not already installed
 if ! command -v node &> /dev/null; then
     echo "Installing Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt install -y nodejs
+    sudo dnf install nodejs -y
 fi
 
 # Install PM2 globally if not already installed
@@ -25,17 +28,11 @@ fi
 # Install Nginx if not already installed
 if ! command -v nginx &> /dev/null; then
     echo "Installing Nginx..."
-    sudo apt install -y nginx
-fi
-
-# Install Certbot for SSL
-if ! command -v certbot &> /dev/null; then
-    echo "Installing Certbot..."
-    sudo apt install -y certbot python3-certbot-nginx
+    sudo dnf install nginx -y
 fi
 
 # Create application directory if it doesn't exist
-APP_DIR="/home/ubuntu/bs-release"
+APP_DIR="/home/ec2-user/bs-release"
 if [ ! -d "$APP_DIR" ]; then
     echo "Creating application directory..."
     mkdir -p $APP_DIR
@@ -43,7 +40,7 @@ fi
 
 # Set proper permissions
 echo "Setting up permissions..."
-sudo chown -R ubuntu:ubuntu $APP_DIR
+sudo chown -R ec2-user:ec2-user $APP_DIR
 chmod -R 755 $APP_DIR
 
 # Install dependencies
@@ -60,9 +57,16 @@ echo "Setting up logs directory..."
 mkdir -p $APP_DIR/logs
 chmod 755 $APP_DIR/logs
 
+# Configure SELinux for Nginx (if enabled)
+echo "Configuring SELinux..."
+if command -v sestatus &> /dev/null && sestatus | grep -q "SELinux status: *enabled"; then
+    sudo setsebool -P httpd_can_network_connect 1
+    sudo semanage port -a -t http_port_t -p tcp 3000 || true
+fi
+
 # Configure Nginx
 echo "Configuring Nginx..."
-sudo tee /etc/nginx/sites-available/bs-release << EOF
+sudo tee /etc/nginx/conf.d/bs-release.conf << EOF
 server {
     listen 80;
     server_name _;  # Replace with your domain
@@ -85,18 +89,17 @@ server {
 }
 EOF
 
-# Enable the site
-echo "Enabling Nginx site..."
-sudo ln -sf /etc/nginx/sites-available/bs-release /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+# Remove default Nginx configuration if it exists
+sudo rm -f /etc/nginx/conf.d/default.conf
 
 # Test Nginx configuration
 echo "Testing Nginx configuration..."
 sudo nginx -t
 
-# Restart Nginx
-echo "Restarting Nginx..."
-sudo systemctl restart nginx
+# Start and enable Nginx service
+echo "Starting Nginx service..."
+sudo systemctl enable nginx
+sudo systemctl start nginx
 
 # Start the application with PM2
 echo "Starting application with PM2..."
@@ -109,15 +112,28 @@ pm2 save
 
 # Setup PM2 startup script
 echo "Setting up PM2 startup script..."
-pm2 startup | grep -v "sudo" | bash
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
 
-# Setup automatic PM2 startup
-echo "Setting up automatic PM2 startup..."
-sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+# Setup firewall rules
+echo "Configuring firewall..."
+if command -v firewall-cmd &> /dev/null; then
+    sudo firewall-cmd --permanent --add-service=http
+    sudo firewall-cmd --permanent --add-service=https
+    sudo firewall-cmd --permanent --add-port=3000/tcp
+    sudo firewall-cmd --reload
+fi
 
 echo "Deployment completed successfully!"
+echo ""
 echo "Next steps:"
-echo "1. Configure your domain in Nginx configuration"
-echo "2. Set up SSL with Certbot: sudo certbot --nginx -d your-domain.com"
+echo "1. Configure your domain in Nginx configuration at /etc/nginx/conf.d/bs-release.conf"
+echo "2. Install and configure SSL certificate"
 echo "3. Check application status: pm2 status"
-echo "4. View logs: pm2 logs" 
+echo "4. View logs: pm2 logs"
+echo ""
+echo "Common commands:"
+echo "- Restart application: pm2 restart bs-release"
+echo "- View logs: pm2 logs"
+echo "- Monitor resources: pm2 monit"
+echo "- Restart Nginx: sudo systemctl restart nginx"
+echo "- View Nginx logs: sudo tail -f /var/log/nginx/error.log" 
