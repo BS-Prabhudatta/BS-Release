@@ -19,6 +19,7 @@ Before you begin, ensure you have the following installed:
 - Node.js (v14.0.0 or higher)
 - npm (v6.0.0 or higher)
 - Git
+- PM2 (for production deployment)
 
 ## Installation
 
@@ -38,7 +39,12 @@ cd BS-Release
 npm install
 ```
 
-3. Create necessary directories:
+3. Build CSS:
+```bash
+npm run build
+```
+
+4. Create necessary directories:
 ```bash
 # Linux/Mac
 mkdir -p public/uploads
@@ -50,7 +56,7 @@ New-Item -ItemType Directory -Force -Path public/uploads
 mkdir "public\uploads"
 ```
 
-4. Set up environment configuration:
+5. Set up environment configuration:
 
 Option A - Using the example file:
 ```bash
@@ -101,7 +107,7 @@ COOKIE_MAX_AGE=86400000            # 24 hours in milliseconds
 - Store sensitive credentials securely
 - Never commit the `.env` file to version control
 
-5. Update the `.env` file with your configuration:
+6. Update the `.env` file with your configuration:
 ```env
 NODE_ENV=development
 PORT=3000
@@ -375,3 +381,54 @@ For support, please open an issue in the repository or contact the maintainers.
 - Express.js team
 - Tailwind CSS team
 - Quill.js contributors 
+
+## PM2 Commands
+
+- Start application: `npm run pm2:start`
+- Stop application: `npm run pm2:stop`
+- Restart application: `npm run pm2:restart`
+- View logs: `npm run pm2:logs`
+- Check status: `npm run pm2:status`
+
+## Directory Structure
+
+```
+bs-release/
+├── db/                 # Database files
+├── logs/              # Application logs
+├── public/            # Static files
+├── routes/            # Route handlers
+├── views/             # EJS templates
+├── server.js          # Main application file
+├── ecosystem.config.js # PM2 configuration
+└── deploy.sh          # Deployment script
+```
+
+## Environment Variables
+
+- `NODE_ENV`: Application environment (development/production)
+- `PORT`: Application port (default: 3000)
+- `SESSION_SECRET`: Session secret key
+- `DB_PATH`: Path to SQLite database file
+
+## Security Considerations
+
+1. Always use HTTPS in production
+2. Set a secure SESSION_SECRET
+3. Configure proper file permissions
+4. Use environment variables for sensitive data
+5. Keep dependencies updated
+
+## Maintenance
+
+1. Regular database backups
+2. Monitor application logs
+3. Update dependencies regularly
+4. Check PM2 status and logs
+
+## Troubleshooting
+
+1. Check logs: `pm2 logs`
+2. Verify database permissions
+3. Check environment variables
+4. Restart application if needed: `pm2 restart bs-release` 

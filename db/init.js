@@ -1,8 +1,12 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
+
+// Database file path
+const dbPath = path.join(__dirname, 'releases.db');
 
 // Create a new database or open existing
-const db = new sqlite3.Database(path.join(__dirname, 'releases.db'));
+const db = new sqlite3.Database(dbPath);
 
 // Enable foreign keys
 db.run('PRAGMA foreign_keys = ON');
@@ -26,9 +30,20 @@ const get = (sql, params = []) => {
     });
 };
 
+// Check if database exists
+const dbExists = fs.existsSync(dbPath);
+
 // Create tables
 const initDb = async () => {
+    // Skip initialization if database already exists
+    if (dbExists) {
+        console.log('Database already exists, skipping initialization');
+        return;
+    }
+
     try {
+        console.log('Initializing new database...');
+        
         // Products table
         await run(`
             CREATE TABLE IF NOT EXISTS products (
@@ -70,17 +85,17 @@ const initDb = async () => {
             {
                 slug: 'marcom',
                 name: 'Marcom',
-                description: 'Marketing Communications Platform for enterprise businesses'
+                description: 'Unified digital platform that streamlines campaign planning, resource management, real-time collaboration, and analytics for enhanced marketing efficiency.'
             },
             {
                 slug: 'collaborate',
                 name: 'Collaborate',
-                description: 'Team collaboration and project management solution'
+                description: 'Streamlines the approval and annotation process by enabling real-time collaboration, comprehensive comparison, and efficient change tracking.'
             },
             {
                 slug: 'lam',
                 name: 'Lam',
-                description: 'Learning and Assessment Management System'
+                description: 'Localized marketing platform that enables efficient content creation and deployment through template-based systems, advanced targeting, and performance analytics to boost brand consistency and impact.'
             }
         ];
 

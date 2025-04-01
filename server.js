@@ -4,6 +4,8 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const csrf = require('csurf');
 const session = require('express-session');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./swagger');
 
 // Import database connection and routes
 const { db, initPromise } = require('./db/init');
@@ -39,12 +41,53 @@ app.use((req, res, next) => {
     next();
 });
 
+// Add endpoint to get CSRF token
+app.get('/api/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
+
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // View engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
+
+// Add Swagger UI route before other routes
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: "BS-Release API Documentation",
+    customfavIcon: "/favicon.ico",
+    swaggerOptions: {
+        persistAuthorization: true,
+        displayRequestDuration: true,
+        filter: true,
+        deepLinking: true,
+        defaultModelsExpandDepth: -1,
+        defaultModelExpandDepth: 1,
+        docExpansion: 'none',
+        tryItOutEnabled: true,
+        requestSnippetsEnabled: true,
+        requestSnippetsGenerators: {
+            curl_bash: {
+                template: [
+                    'curl -X {{method}} "{{url}}"',
+                    '  -H "Content-Type: application/json"',
+                    '  -H "X-CSRF-Token: {{csrfToken}}"',
+                    '  -d \'{{body}}\''
+                ].join('\\n'),
+                method: 'curl',
+                url: '{{url}}',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{csrfToken}}'
+                },
+                body: '{{body}}'
+            }
+        }
+    }
+}));
 
 // Mount all routes
 app.use('/', routes);
@@ -72,10 +115,11 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
     try {
         await initPromise;
-        console.log('Database initialized successfully');
+        console.log('Database is ready');
         
         app.listen(port, () => {
             console.log(`Server running at http://localhost:${port}`);
+            console.log(`API Documentation available at http://localhost:${port}/api-docs`);
         });
     } catch (error) {
         console.error('Failed to initialize database:', error);

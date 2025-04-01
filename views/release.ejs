@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= product.name %> v<%= release.version %></title>
+    <title>
+        <%= product.name %> v<%= release.version %>
+    </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,14 +18,17 @@
             display: flex;
             flex-direction: column;
         }
+
         main {
             flex: 1;
         }
+
         .prose img {
             max-width: 100%;
             height: auto;
             border-radius: 0.5rem;
         }
+
         .prose iframe {
             width: 100%;
             aspect-ratio: 16/9;
@@ -31,8 +37,9 @@
         }
     </style>
 </head>
+
 <body class="bg-gray-50">
-    <header class="bg-white shadow-sm">
+    <!-- <header class="bg-white shadow-sm">
         <div class="container mx-auto px-4 sm:px-6 py-4">
             <nav class="flex items-center space-x-4">
                 <a href="/releases/<%= product.slug %>" class="text-gray-600 hover:text-gray-900">
@@ -45,32 +52,31 @@
                 </h1>
             </nav>
         </div>
-    </header>
+    </header> -->
 
     <main class="container mx-auto px-4 sm:px-6 py-8">
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-full mx-auto">
             <!-- Release Header Card -->
-            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="mb-8">
                 <div class="flex items-center justify-between mb-4">
                     <div>
-                        <h2 class="text-3xl font-bold text-gray-900">Version <%= release.version %></h2>
+                        <h2 class="text-3xl font-bold text-gray-900">Version <%= release.version %>
+                        </h2>
                         <p class="text-gray-500 mt-1">
-                            Released on <%= new Date(release.release_date).toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                            }) %>
+                            Released on <%= new Date(release.release_date).toLocaleDateString('en-US', { year: 'numeric'
+                                , month: 'long' , day: 'numeric' }) %>
                         </p>
                     </div>
                 </div>
-                <p class="text-gray-600"><%= product.description %></p>
+                <p class="text-gray-600">
+                    <%= product.description %>
+                </p>
             </div>
 
             <!-- Features Section -->
             <div class="space-y-6">
-                <h3 class="text-2xl font-semibold text-gray-900 mb-6">What's New</h3>
                 <div class="grid gap-6">
-                    <% release.features.forEach(feature => { %>
+                    <% release.features.forEach(feature=> { %>
                         <div class="bg-white rounded-lg shadow-sm overflow-hidden">
                             <div class="p-6">
                                 <h4 class="text-xl font-semibold text-gray-900 mb-4">
@@ -81,16 +87,17 @@
                                 </div>
                             </div>
                         </div>
-                    <% }); %>
+                        <% }); %>
                 </div>
             </div>
         </div>
     </main>
 
-    <footer class="bg-white border-t border-gray-100">
+    <!-- <footer class="bg-white border-t border-gray-100">
         <div class="container mx-auto px-4 sm:px-6 py-6">
             <p class="text-center text-gray-500 text-sm">&copy; <%= new Date().getFullYear() %> BrandSystems. All Rights Reserved. Part of the Wellcom Worldwide Group.</p>
         </div>
-    </footer>
+    </footer> -->
 </body>
-</html> 
+
+</html>

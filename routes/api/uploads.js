@@ -15,6 +15,48 @@ const apiLimiter = rateLimit({
     max: 100 // 100 requests per windowMs
 });
 
+/**
+ * @swagger
+ * /api/uploads/image:
+ *   post:
+ *     summary: Upload an image file
+ *     tags: [Uploads]
+ *     security:
+ *       - csrfToken: []
+ *       - sessionAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: The image file to upload (max 5MB)
+ *     responses:
+ *       200:
+ *         description: Image uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *                   description: URL of the uploaded image
+ *       400:
+ *         description: No file uploaded or invalid file type
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - CSRF token missing or invalid
+ *       413:
+ *         description: File too large (max 5MB)
+ *       500:
+ *         description: Server error
+ */
 // Configure multer for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {

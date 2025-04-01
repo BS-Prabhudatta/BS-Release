@@ -2,6 +2,117 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../../db/init');
 
+/**
+ * @swagger
+ * /releases:
+ *   get:
+ *     summary: Get all releases for all products
+ *     tags: [Public Releases]
+ *     responses:
+ *       200:
+ *         description: List of all releases grouped by product
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   product:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       slug:
+ *                         type: string
+ *                   releases:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         version:
+ *                           type: string
+ *                         release_date:
+ *                           type: string
+ *                           format: date
+ *                         features:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               title:
+ *                                 type: string
+ *                               content:
+ *                                 type: string
+ *       500:
+ *         description: Server error
+ */
+// Get all releases for all products
+router.get('/', async (req, res) => {
+    // ... existing code ...
+});
+
+/**
+ * @swagger
+ * /releases/{product}:
+ *   get:
+ *     summary: Get all releases for a specific product
+ *     tags: [Public Releases]
+ *     parameters:
+ *       - in: path
+ *         name: product
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [marcom, collaborate, lam]
+ *         description: The product identifier
+ *     responses:
+ *       200:
+ *         description: Product and its releases
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 product:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     slug:
+ *                       type: string
+ *                 releases:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       version:
+ *                         type: string
+ *                       release_date:
+ *                         type: string
+ *                         format: date
+ *                       features:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             title:
+ *                               type: string
+ *                             content:
+ *                               type: string
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
+ */
 // Get all releases for a product
 router.get('/:product', (req, res) => {
     const { product } = req.params;
@@ -53,6 +164,62 @@ router.get('/:product', (req, res) => {
     });
 });
 
+/**
+ * @swagger
+ * /releases/{product}/{version}:
+ *   get:
+ *     summary: Get specific release details
+ *     tags: [Public Releases]
+ *     parameters:
+ *       - in: path
+ *         name: product
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [marcom, collaborate, lam]
+ *         description: The product identifier
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: ^\d+\.\d+\.\d+$
+ *         description: Version number in format x.x.x
+ *     responses:
+ *       200:
+ *         description: Release details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 version:
+ *                   type: string
+ *                 release_date:
+ *                   type: string
+ *                   format: date
+ *                 product_name:
+ *                   type: string
+ *                 product_slug:
+ *                   type: string
+ *                 features:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       title:
+ *                         type: string
+ *                       content:
+ *                         type: string
+ *       404:
+ *         description: Release not found
+ *       500:
+ *         description: Server error
+ */
 // Get specific release
 router.get('/:product/:version', (req, res) => {
     const { product, version } = req.params;

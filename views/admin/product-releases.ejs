@@ -246,10 +246,16 @@
                             <li>${feature.title}</li>
                         `).join('')}
                     </ul>
-                    <a href="/admin/releases/${product}/${release.version}" 
-                       class="block mt-4 text-gray-600 hover:text-black underline">
-                        For the complete release note click here
-                    </a>
+                    <div class="mt-6">
+                             <a href="/admin/releases/${product}/${release.version}" 
+                                class="inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
+                                View full release
+                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 5l7 7-7 7" />
+                                </svg>
+                            </a>
+                        </div>
                 </div>
             `;
         }
