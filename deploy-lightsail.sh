@@ -11,16 +11,25 @@ sudo apt update && sudo apt upgrade -y
 
 # Install required packages
 echo "Installing required packages..."
-sudo apt install -y nginx certbot python3-certbot-nginx
+sudo apt install -y nginx certbot python3-certbot-nginx build-essential
 
 # Install Node.js
 echo "Installing Node.js..."
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Install PM2 globally
-echo "Installing PM2..."
-sudo npm install -g pm2
+# Verify Node.js and npm installation
+echo "Verifying Node.js and npm versions..."
+node --version
+npm --version
+
+# Install global packages
+echo "Installing global packages..."
+sudo npm install -g pm2 tailwindcss
+
+# Verify Tailwind installation
+echo "Verifying Tailwind installation..."
+tailwindcss --version
 
 # Create application directory
 echo "Setting up application directory..."
@@ -38,13 +47,13 @@ else
     cd /var/www/release.brandsystems.com
 fi
 
-# Install dependencies
-echo "Installing dependencies..."
+# Install production dependencies
+echo "Installing production dependencies..."
 npm install --production
 
-# Build CSS
+# Build CSS using global Tailwind
 echo "Building CSS..."
-npm run build
+tailwindcss -i ./public/css/input.css -o ./public/css/output.css
 
 # Create required directories
 echo "Creating required directories..."
@@ -79,6 +88,16 @@ pm2 save
 echo "Setting up PM2 startup script..."
 pm2 startup ubuntu
 sudo env PATH=$PATH:/usr/bin pm2 startup ubuntu -u $USER --hp /home/$USER
+
+# Verify CSS build
+echo "Verifying CSS build..."
+if [ -f "public/css/output.css" ]; then
+    echo "CSS build successful!"
+    ls -l public/css/output.css
+else
+    echo "Warning: CSS file not found. Build might have failed."
+    exit 1
+fi
 
 echo "Deployment completed successfully!"
 echo "Your application should now be running at https://release.brandsystems.com"
