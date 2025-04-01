@@ -124,10 +124,25 @@ NODE_ENV=production
 EOL
 fi
 
+# Install build dependencies
+echo "Installing build dependencies..."
+sudo apt-get update
+sudo apt-get install -y python3 make gcc g++ build-essential sqlite3 libsqlite3-dev
+
+# Clean and reinstall dependencies
+echo "Cleaning and reinstalling dependencies..."
+rm -rf node_modules package-lock.json
+npm cache clean --force
+
+# Install dependencies and rebuild sqlite3
+echo "Installing dependencies and rebuilding sqlite3..."
+npm install --build-from-source
+npm rebuild sqlite3 --build-from-source
+
 # Start application with PM2
 echo "Starting application with PM2..."
 pm2 delete bs-release 2>/dev/null || true
-NODE_ENV=production pm2 start server.js --name bs-release
+NODE_ENV=production pm2 start server.js --name bs-release --max-memory-restart 300M
 pm2 save
 
 # Verify application is running
