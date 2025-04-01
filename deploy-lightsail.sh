@@ -32,7 +32,7 @@ if ! command -v nginx &> /dev/null; then
 fi
 
 # Create application directory if it doesn't exist
-APP_DIR="/home/ec2-user/bs-release"
+APP_DIR="/home/ec2-user/BS-Release"
 if [ ! -d "$APP_DIR" ]; then
     echo "Creating application directory..."
     mkdir -p $APP_DIR
@@ -66,7 +66,7 @@ fi
 
 # Configure Nginx
 echo "Configuring Nginx..."
-sudo tee /etc/nginx/conf.d/bs-release.conf << EOF
+sudo tee /etc/nginx/conf.d/BS-Release.conf << EOF
 server {
     listen 80;
     server_name _;  # Replace with your domain
@@ -126,23 +126,23 @@ fi
 echo "Deployment completed successfully!"
 echo ""
 echo "Next steps:"
-echo "1. Configure your domain in Nginx configuration at /etc/nginx/conf.d/bs-release.conf"
+echo "1. Configure your domain in Nginx configuration at /etc/nginx/conf.d/BS-Release.conf"
 echo "2. Install and configure SSL certificate"
 echo "3. Check application status: pm2 status"
 echo "4. View logs: pm2 logs"
 echo ""
 echo "Common commands:"
-echo "- Restart application: pm2 restart bs-release"
+echo "- Restart application: pm2 restart BS-Release"
 echo "- View logs: pm2 logs"
 echo "- Monitor resources: pm2 monit"
 echo "- Restart Nginx: sudo systemctl restart nginx"
 echo "- View Nginx logs: sudo tail -f /var/log/nginx/error.log"
 
 # Create directory for application
-mkdir -p /home/ec2-user/bs-release
+mkdir -p /home/ec2-user/BS-Release
 
 # Clone your repository (if using HTTPS)
-cd /home/ec2-user/bs-release
+cd /home/ec2-user/BS-Release
 git clone https://github.com/BS-Prabhudatta/BS-Release.git .
 
 # # If using SSH, first set up your SSH key
