@@ -310,7 +310,11 @@
                 
                 // Access the nested release data
                 document.getElementById('version').value = data.version;
-                document.getElementById('releaseDate').value = data.release_date;
+                
+                // Format the release date to YYYY-MM-DD
+                const releaseDate = new Date(data.release_date);
+                const formattedDate = releaseDate.toISOString().split('T')[0];
+                document.getElementById('releaseDate').value = formattedDate;
                 
                 // Store features data globally
                 featuresData = data.features || [];
@@ -332,7 +336,7 @@
                     throw new Error('Feature not found');
                 }
                 
-                currentFeatureId = index;
+                currentFeatureId = feature.id;
                 openFeatureModal(feature.title, feature.content);
             } catch (error) {
                 console.error('Error:', error);
@@ -351,23 +355,11 @@
                     throw new Error('Feature not found');
                 }
 
-                // Remove the feature from the array
-                featuresData.splice(index, 1);
-                
-                // Re-render the features
-                renderFeatures(featuresData);
-                
-                // Save the updated features
-                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
-                    method: 'PUT',
+                const response = await fetch(`/admin/api/releases/${product}/${version}/features/${feature.id}`, {
+                    method: 'DELETE',
                     headers: { 
-                        'Content-Type': 'application/json',
                         'CSRF-Token': csrfToken
-                    },
-                    body: JSON.stringify({
-                        date: document.getElementById('releaseDate').value,
-                        features: featuresData
-                    })
+                    }
                 });
 
                 if (!response.ok) {
@@ -375,7 +367,12 @@
                     throw new Error(errorData.error || 'Failed to delete feature');
                 }
 
-                await handleApiResponse(response);
+                // Remove the feature from the array
+                featuresData.splice(index, 1);
+                
+                // Re-render the features
+                renderFeatures(featuresData);
+                
                 await modal.alert('Feature deleted successfully');
             } catch (error) {
                 console.error('Error:', error);
@@ -424,37 +421,46 @@
                 
                 if (currentFeatureId !== null) {
                     // Update existing feature
-                    featuresData[currentFeatureId] = { title, content };
+                    const response = await fetch(`/admin/api/releases/${product}/${version}/features/${currentFeatureId}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify({ title, content })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to update feature');
+                    }
+
+                    const updatedFeature = await response.json();
+                    // Find the feature in the array by ID and update it
+                    const featureIndex = featuresData.findIndex(f => f.id === currentFeatureId);
+                    if (featureIndex !== -1) {
+                        featuresData[featureIndex] = updatedFeature;
+                    }
                 } else {
                     // Add new feature
-                    featuresData.push({ title, content });
-                }
-                
-                // Save the updated features
-                const response = await fetch(`/admin/api/releases/${product}/${version}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'CSRF-Token': csrfToken
-                    },
-                    body: JSON.stringify({
-                        date: document.getElementById('releaseDate').value,
-                        features: featuresData
-                    })
-                });
+                    const response = await fetch(`/admin/api/releases/${product}/${version}/features`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify({ title, content })
+                    });
 
-                if (response.status === 401) {
-                    // Authentication required - redirect to login
-                    window.location.href = '/admin/login';
-                    return;
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to create feature');
+                    }
+
+                    const newFeature = await response.json();
+                    featuresData.push(newFeature);
                 }
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to save changes');
-                }
-
-                await handleApiResponse(response);
                 closeFeatureModal();
                 renderFeatures(featuresData);
                 await modal.alert('Feature saved successfully');
@@ -489,6 +495,13 @@
 
         async function saveAllChanges() {
             const date = document.getElementById('releaseDate').value;
+            console.log('Saving changes with data:', { date, features: featuresData });
+
+            // Validate date
+            if (!date) {
+                showError('releaseDate', 'Release date is required');
+                return;
+            }
 
             try {
                 showLoading();
@@ -508,6 +521,7 @@
 
                 if (!response.ok) {
                     const errorData = await response.json();
+                    console.error('Server response:', errorData);
                     throw new Error(errorData.error || 'Failed to save changes');
                 }
 

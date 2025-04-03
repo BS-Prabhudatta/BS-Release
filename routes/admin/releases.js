@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { param, validationResult } = require('express-validator');
 const { requireAuth } = require('../../middleware/auth');
-const { db } = require('../../db/init');
+const { query } = require('../../db/init');
 
 // Cache control middleware
 const cacheControl = (req, res, next) => {

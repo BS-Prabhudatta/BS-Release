@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../../../middleware/auth');
-const { db } = require('../../../db/init');
+const { query } = require('../../../db/init');
 const { body, param, validationResult } = require('express-validator');
 const csrf = require('csurf');
 const rateLimit = require('express-rate-limit');
@@ -47,13 +47,8 @@ const apiLimiter = rateLimit({
 // Get all products
 router.get('/products', requireAuth, async (req, res) => {
     try {
-        const products = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM products ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-        res.json(products);
+        const result = await query('SELECT * FROM products ORDER BY name');
+        res.json(result.rows);
     } catch (error) {
         console.error('Error fetching products:', error);
         res.status(500).json({ error: 'Failed to fetch products' });
@@ -126,37 +121,29 @@ router.get('/:product', requireAuth, async (req, res) => {
     const { product } = req.params;
 
     try {
-        const productRow = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM products WHERE slug = ?', [product], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        if (!productRow) {
+        const productResult = await query('SELECT * FROM products WHERE slug = $1', [product]);
+        
+        if (productResult.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        const releases = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT 
-                    r.*,
-                    GROUP_CONCAT(f.title) as feature_titles,
-                    GROUP_CONCAT(f.content) as feature_contents
-                FROM releases r
-                LEFT JOIN features f ON f.release_id = r.id
-                WHERE r.product_id = ?
-                GROUP BY r.id
-                ORDER BY r.release_date DESC
-            `, [productRow.id], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+        const productRow = productResult.rows[0];
+
+        const releasesResult = await query(`
+            SELECT 
+                r.*,
+                string_agg(f.title, ',') as feature_titles,
+                string_agg(f.content, ',') as feature_contents
+            FROM releases r
+            LEFT JOIN features f ON f.release_id = r.id
+            WHERE r.product_id = $1
+            GROUP BY r.id, r.version, r.release_date, r.product_id
+            ORDER BY r.release_date DESC
+        `, [productRow.id]);
 
         res.json({
             product: productRow,
-            releases: releases.map(release => ({
+            releases: releasesResult.rows.map(release => ({
                 ...release,
                 features: release.feature_titles ? release.feature_titles.split(',').map((title, index) => ({
                     title,
@@ -235,40 +222,33 @@ router.get('/:product/:version', requireAuth, async (req, res) => {
     const { product, version } = req.params;
 
     try {
-        const release = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT r.*, p.name as product_name, p.slug as product_slug
-                FROM releases r
-                JOIN products p ON p.id = r.product_id
-                WHERE p.slug = ? AND r.version = ?
-            `, [product, version], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        const releaseResult = await query(`
+            SELECT r.*, p.name as product_name, p.slug as product_slug
+            FROM releases r
+            JOIN products p ON p.id = r.product_id
+            WHERE p.slug = $1 AND r.version = $2
+        `, [product, version]);
 
-        if (!release) {
+        if (releaseResult.rows.length === 0) {
             return res.status(404).json({ error: 'Release not found' });
         }
 
-        const features = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT * FROM features
-                WHERE release_id = ?
-                ORDER BY id
-            `, [release.id], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+        const release = releaseResult.rows[0];
+
+        // Get features for this release
+        const featuresResult = await query(`
+            SELECT * FROM features 
+            WHERE release_id = $1 
+            ORDER BY id
+        `, [release.id]);
 
         res.json({
             ...release,
-            features
+            features: featuresResult.rows
         });
     } catch (error) {
         console.error('Error fetching release:', error);
-        res.status(500).json({ error: 'Failed to fetch release details' });
+        res.status(500).json({ error: 'Failed to fetch release' });
     }
 });
 
@@ -329,70 +309,77 @@ router.get('/:product/:version', requireAuth, async (req, res) => {
  */
 // Create a new release
 router.post('/', requireAuth, apiLimiter, csrfProtection, [
-    body('product').isIn(['marcom', 'collaborate', 'lam']).withMessage('Invalid product'),
-    body('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Invalid version format'),
+    body('product').isString().notEmpty(),
+    body('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Version must be in format x.x.x'),
     body('date').isDate().withMessage('Invalid date format'),
-    body('features').isArray().withMessage('Features must be an array')
+    body('features').optional().isArray().withMessage('Features must be an array'),
+    body('features.*.title').optional().isString().withMessage('Feature title must be a string'),
+    body('features.*.content').optional().isString().withMessage('Feature content must be a string')
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+        console.error('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { product, version, date, features } = req.body;
+    const { product, version, date, features = [] } = req.body;
 
     try {
-        // First check if the release already exists
-        const existingRelease = await db.get(
-            `SELECT r.id 
-             FROM releases r 
-             JOIN products p ON r.product_id = p.id 
-             WHERE p.slug = ? AND r.version = ?`,
-            [product, version]
-        );
-
-        if (existingRelease) {
-            return res.status(400).json({ error: 'Release with this version already exists' });
-        }
-
-        const productRow = await db.get('SELECT id FROM products WHERE slug = ?', [product]);
-        if (!productRow) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        await db.run('BEGIN TRANSACTION');
+        // Start a transaction
+        await query('BEGIN');
 
         try {
-            // Insert the release first
-            const result = await db.run(
-                'INSERT INTO releases (product_id, version, release_date) VALUES (?, ?, ?)',
-                [productRow.id, version, date]
+            // Get product id
+            const productResult = await query(
+                'SELECT id FROM products WHERE slug = $1',
+                [product]
             );
 
-            const releaseId = result.lastID;
-
-            // Only insert features if we have a valid releaseId
-            if (releaseId) {
-                for (const feature of features) {
-                    if (!feature.title) continue;
-                    
-                    await db.run(
-                        'INSERT INTO features (release_id, title, content) VALUES (?, ?, ?)',
-                        [releaseId, feature.title, feature.content || null]
-                    );
-                }
-            } else {
-                throw new Error('Failed to create release - no release ID returned');
+            if (productResult.rows.length === 0) {
+                throw new Error('Product not found');
             }
 
-            await db.run('COMMIT');
+            const productId = productResult.rows[0].id;
+
+            // Check if version already exists
+            const existingRelease = await query(
+                'SELECT id FROM releases WHERE product_id = $1 AND version = $2',
+                [productId, version]
+            );
+
+            if (existingRelease.rows.length > 0) {
+                throw new Error('Version already exists');
+            }
+
+            // Insert the release
+            const releaseResult = await query(
+                'INSERT INTO releases (product_id, version, release_date) VALUES ($1, $2, $3) RETURNING id',
+                [productId, version, date]
+            );
+
+            const releaseId = releaseResult.rows[0].id;
+
+            // Insert features if any
+            if (features && features.length > 0) {
+                for (const feature of features) {
+                    if (feature.title) { // Only insert if title exists
+                        await query(
+                            'INSERT INTO features (release_id, title, content) VALUES ($1, $2, $3)',
+                            [releaseId, feature.title, feature.content || null]
+                        );
+                    }
+                }
+            }
+
+            await query('COMMIT');
+
             res.status(201).json({ 
                 message: 'Release created successfully',
                 releaseId: releaseId
             });
-        } catch (error) {
-            await db.run('ROLLBACK');
-            throw error;
+        } catch (err) {
+            await query('ROLLBACK');
+            throw err;
         }
     } catch (error) {
         console.error('Error creating release:', error);
@@ -469,11 +456,17 @@ router.post('/', requireAuth, apiLimiter, csrfProtection, [
 router.put('/:product/:version', requireAuth, apiLimiter, csrfProtection, [
     param('product').isIn(['marcom', 'collaborate', 'lam']).withMessage('Invalid product'),
     param('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Invalid version format'),
-    body('date').isDate().withMessage('Invalid date format'),
+    body('date').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Invalid date format. Expected YYYY-MM-DD'),
     body('features').isArray().withMessage('Features must be an array')
 ], async (req, res) => {
+    console.log('Received update request:', {
+        params: req.params,
+        body: req.body
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+        console.error('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
     }
 
@@ -481,42 +474,33 @@ router.put('/:product/:version', requireAuth, apiLimiter, csrfProtection, [
     const { date, features } = req.body;
 
     try {
-        const productRow = await db.get('SELECT id FROM products WHERE slug = ?', [product]);
-        if (!productRow) {
+        const productRow = await query('SELECT id FROM products WHERE slug = $1', [product]);
+        if (productRow.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        const releaseRow = await db.get(
-            'SELECT id FROM releases WHERE product_id = ? AND version = ?',
-            [productRow.id, version]
-        );
-        if (!releaseRow) {
+        const releaseRow = await query('SELECT id FROM releases WHERE product_id = $1 AND version = $2', [productRow.rows[0].id, version]);
+        if (releaseRow.rows.length === 0) {
             return res.status(404).json({ error: 'Release not found' });
         }
 
-        await db.run('BEGIN TRANSACTION');
+        await query('BEGIN');
 
         try {
-            await db.run(
-                'UPDATE releases SET release_date = ? WHERE id = ?',
-                [date, releaseRow.id]
-            );
+            await query('UPDATE releases SET release_date = $1 WHERE id = $2', [date, releaseRow.rows[0].id]);
 
-            await db.run('DELETE FROM features WHERE release_id = ?', [releaseRow.id]);
+            await query('DELETE FROM features WHERE release_id = $1', [releaseRow.rows[0].id]);
 
             for (const feature of features) {
                 if (!feature.title) continue;
                 
-                await db.run(
-                    'INSERT INTO features (release_id, title, content) VALUES (?, ?, ?)',
-                    [releaseRow.id, feature.title, feature.content || null]
-                );
+                await query('INSERT INTO features (release_id, title, content) VALUES ($1, $2, $3)', [releaseRow.rows[0].id, feature.title, feature.content || null]);
             }
 
-            await db.run('COMMIT');
+            await query('COMMIT');
             res.json({ message: 'Release updated successfully' });
         } catch (error) {
-            await db.run('ROLLBACK');
+            await query('ROLLBACK');
             throw error;
         }
     } catch (error) {
@@ -575,34 +559,256 @@ router.delete('/:product/:version', requireAuth, apiLimiter, csrfProtection, [
     const { product, version } = req.params;
 
     try {
-        const productRow = await db.get('SELECT id FROM products WHERE slug = ?', [product]);
-        if (!productRow) {
+        const productRow = await query('SELECT id FROM products WHERE slug = $1', [product]);
+        if (productRow.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        const releaseRow = await db.get(
-            'SELECT id FROM releases WHERE product_id = ? AND version = ?',
-            [productRow.id, version]
-        );
-        if (!releaseRow) {
+        const releaseRow = await query('SELECT id FROM releases WHERE product_id = $1 AND version = $2', [productRow.rows[0].id, version]);
+        if (releaseRow.rows.length === 0) {
             return res.status(404).json({ error: 'Release not found' });
         }
 
-        await db.run('BEGIN TRANSACTION');
+        await query('BEGIN');
 
         try {
-            await db.run('DELETE FROM features WHERE release_id = ?', [releaseRow.id]);
-            await db.run('DELETE FROM releases WHERE id = ?', [releaseRow.id]);
+            await query('DELETE FROM features WHERE release_id = $1', [releaseRow.rows[0].id]);
+            await query('DELETE FROM releases WHERE id = $1', [releaseRow.rows[0].id]);
 
-            await db.run('COMMIT');
+            await query('COMMIT');
             res.json({ message: 'Release deleted successfully' });
         } catch (error) {
-            await db.run('ROLLBACK');
+            await query('ROLLBACK');
             throw error;
         }
     } catch (error) {
         console.error('Error deleting release:', error);
         res.status(500).json({ error: 'Failed to delete release' });
+    }
+});
+
+/**
+ * @swagger
+ * /admin/api/releases/{product}/{version}/features:
+ *   post:
+ *     summary: Create a new feature for a release
+ *     tags: [Features]
+ *     security:
+ *       - csrfToken: []
+ *     parameters:
+ *       - in: path
+ *         name: product
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [marcom, collaborate, lam]
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: ^\d+\.\d+\.\d+$
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - content
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ */
+// Create a new feature
+router.post('/:product/:version/features', requireAuth, apiLimiter, csrfProtection, [
+    param('product').isIn(['marcom', 'collaborate', 'lam']).withMessage('Invalid product'),
+    param('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Invalid version format'),
+    body('title').isString().notEmpty().withMessage('Title is required'),
+    body('content').isString().withMessage('Content is required')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { product, version } = req.params;
+    const { title, content } = req.body;
+
+    try {
+        const productRow = await query('SELECT id FROM products WHERE slug = $1', [product]);
+        if (productRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const releaseRow = await query('SELECT id FROM releases WHERE product_id = $1 AND version = $2', [productRow.rows[0].id, version]);
+        if (releaseRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Release not found' });
+        }
+
+        const result = await query(
+            'INSERT INTO features (release_id, title, content) VALUES ($1, $2, $3) RETURNING *',
+            [releaseRow.rows[0].id, title, content]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating feature:', error);
+        res.status(500).json({ error: 'Failed to create feature' });
+    }
+});
+
+/**
+ * @swagger
+ * /admin/api/releases/{product}/{version}/features/{featureId}:
+ *   put:
+ *     summary: Update a feature
+ *     tags: [Features]
+ *     security:
+ *       - csrfToken: []
+ *     parameters:
+ *       - in: path
+ *         name: product
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [marcom, collaborate, lam]
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: ^\d+\.\d+\.\d+$
+ *       - in: path
+ *         name: featureId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - content
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ */
+// Update a feature
+router.put('/:product/:version/features/:featureId', requireAuth, apiLimiter, csrfProtection, [
+    param('product').isIn(['marcom', 'collaborate', 'lam']).withMessage('Invalid product'),
+    param('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Invalid version format'),
+    param('featureId').isInt().withMessage('Invalid feature ID'),
+    body('title').isString().notEmpty().withMessage('Title is required'),
+    body('content').isString().withMessage('Content is required')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { product, version, featureId } = req.params;
+    const { title, content } = req.body;
+
+    try {
+        const productRow = await query('SELECT id FROM products WHERE slug = $1', [product]);
+        if (productRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const releaseRow = await query('SELECT id FROM releases WHERE product_id = $1 AND version = $2', [productRow.rows[0].id, version]);
+        if (releaseRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Release not found' });
+        }
+
+        const result = await query(
+            'UPDATE features SET title = $1, content = $2 WHERE id = $3 AND release_id = $4 RETURNING *',
+            [title, content, featureId, releaseRow.rows[0].id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Feature not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating feature:', error);
+        res.status(500).json({ error: 'Failed to update feature' });
+    }
+});
+
+/**
+ * @swagger
+ * /admin/api/releases/{product}/{version}/features/{featureId}:
+ *   delete:
+ *     summary: Delete a feature
+ *     tags: [Features]
+ *     security:
+ *       - csrfToken: []
+ *     parameters:
+ *       - in: path
+ *         name: product
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [marcom, collaborate, lam]
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: ^\d+\.\d+\.\d+$
+ *       - in: path
+ *         name: featureId
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+// Delete a feature
+router.delete('/:product/:version/features/:featureId', requireAuth, apiLimiter, csrfProtection, [
+    param('product').isIn(['marcom', 'collaborate', 'lam']).withMessage('Invalid product'),
+    param('version').matches(/^\d+\.\d+\.\d+$/).withMessage('Invalid version format'),
+    param('featureId').isInt().withMessage('Invalid feature ID')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { product, version, featureId } = req.params;
+
+    try {
+        const productRow = await query('SELECT id FROM products WHERE slug = $1', [product]);
+        if (productRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const releaseRow = await query('SELECT id FROM releases WHERE product_id = $1 AND version = $2', [productRow.rows[0].id, version]);
+        if (releaseRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Release not found' });
+        }
+
+        const result = await query(
+            'DELETE FROM features WHERE id = $1 AND release_id = $2 RETURNING *',
+            [featureId, releaseRow.rows[0].id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Feature not found' });
+        }
+
+        res.json({ message: 'Feature deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting feature:', error);
+        res.status(500).json({ error: 'Failed to delete feature' });
     }
 });
 

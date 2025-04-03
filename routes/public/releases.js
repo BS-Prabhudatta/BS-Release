@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../../db/init');
+const { query } = require('../../db/init');
 
 /**
  * @swagger
@@ -53,7 +53,28 @@ const { db } = require('../../db/init');
  */
 // Get all releases for all products
 router.get('/', async (req, res) => {
-    // ... existing code ...
+    try {
+        const result = await query(`
+            SELECT 
+                p.*,
+                r.version as latest_version,
+                r.release_date as latest_release_date
+            FROM products p
+            LEFT JOIN releases r ON r.product_id = p.id
+            WHERE r.id = (
+                SELECT id FROM releases 
+                WHERE product_id = p.id 
+                ORDER BY release_date DESC 
+                LIMIT 1
+            )
+            ORDER BY p.name
+        `);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching products:', err);
+        res.status(500).json({ error: 'Failed to load products' });
+    }
 });
 
 /**
@@ -114,54 +135,51 @@ router.get('/', async (req, res) => {
  *         description: Server error
  */
 // Get all releases for a product
-router.get('/:product', (req, res) => {
+router.get('/:product', async (req, res) => {
     const { product } = req.params;
     
-    // First, verify the product exists
-    db.get('SELECT * FROM products WHERE slug = ?', [product], (err, productData) => {
-        if (err) {
-            console.error('Error fetching product:', err);
-            return res.status(500).render('error', { message: 'Failed to load product' });
-        }
+    try {
+        // First, verify the product exists
+        const productResult = await query('SELECT * FROM products WHERE slug = $1', [product]);
         
-        if (!productData) {
+        if (productResult.rows.length === 0) {
             return res.status(404).render('error', { message: 'Product not found' });
         }
+        
+        const productData = productResult.rows[0];
 
         // Get all releases with their features
-        db.all(`
+        const releasesResult = await query(`
             SELECT 
                 r.id as release_id,
                 r.version,
                 r.release_date,
-                GROUP_CONCAT(f.title, '||') as feature_titles,
-                GROUP_CONCAT(f.content, '||') as feature_contents
+                string_agg(f.title, '||') as feature_titles,
+                string_agg(f.content, '||') as feature_contents
             FROM releases r
             LEFT JOIN features f ON f.release_id = r.id
-            WHERE r.product_id = ?
-            GROUP BY r.id
+            WHERE r.product_id = $1
+            GROUP BY r.id, r.version, r.release_date
             ORDER BY r.release_date DESC
-        `, [productData.id], (err, releases) => {
-            if (err) {
-                console.error('Error fetching releases:', err);
-                return res.status(500).render('error', { message: 'Failed to load releases' });
-            }
+        `, [productData.id]);
 
-            // Process the releases to format features properly
-            const formattedReleases = releases.map(release => ({
-                ...release,
-                features: release.feature_titles ? release.feature_titles.split('||').map((title, index) => ({
-                    title,
-                    content: release.feature_contents.split('||')[index]
-                })) : []
-            }));
+        // Process the releases to format features properly
+        const formattedReleases = releasesResult.rows.map(release => ({
+            ...release,
+            features: release.feature_titles ? release.feature_titles.split('||').map((title, index) => ({
+                title,
+                content: release.feature_contents.split('||')[index]
+            })) : []
+        }));
 
-            res.render('releases', { 
-                product: productData, 
-                releases: formattedReleases 
-            });
+        res.render('releases', { 
+            product: productData, 
+            releases: formattedReleases 
         });
-    });
+    } catch (err) {
+        console.error('Error fetching releases:', err);
+        res.status(500).render('error', { message: 'Failed to load releases' });
+    }
 });
 
 /**
@@ -221,49 +239,46 @@ router.get('/:product', (req, res) => {
  *         description: Server error
  */
 // Get specific release
-router.get('/:product/:version', (req, res) => {
+router.get('/:product/:version', async (req, res) => {
     const { product, version } = req.params;
 
-    db.get(`
-        SELECT 
-            p.*, 
-            r.version,
-            r.release_date,
-            r.id as release_id
-        FROM products p
-        JOIN releases r ON r.product_id = p.id
-        WHERE p.slug = ? AND r.version = ?
-    `, [product, version], (err, releaseData) => {
-        if (err) {
-            console.error('Error fetching release:', err);
-            return res.status(500).render('error', { message: 'Failed to load release' });
-        }
+    try {
+        const releaseResult = await query(`
+            SELECT 
+                p.*, 
+                r.version,
+                r.release_date,
+                r.id as release_id
+            FROM products p
+            JOIN releases r ON r.product_id = p.id
+            WHERE p.slug = $1 AND r.version = $2
+        `, [product, version]);
 
-        if (!releaseData) {
+        if (releaseResult.rows.length === 0) {
             return res.status(404).render('error', { message: 'Release not found' });
         }
 
-        // Get features for this release
-        db.all(`
-            SELECT * FROM features 
-            WHERE release_id = ? 
-            ORDER BY id
-        `, [releaseData.release_id], (err, features) => {
-            if (err) {
-                console.error('Error fetching features:', err);
-                return res.status(500).render('error', { message: 'Failed to load features' });
-            }
+        const releaseData = releaseResult.rows[0];
 
-            res.render('release', { 
-                product: releaseData, 
-                release: {
-                    version: releaseData.version,
-                    release_date: releaseData.release_date,
-                    features
-                }
-            });
+        // Get features for this release
+        const featuresResult = await query(`
+            SELECT * FROM features 
+            WHERE release_id = $1 
+            ORDER BY id
+        `, [releaseData.release_id]);
+
+        res.render('release', { 
+            product: releaseData, 
+            release: {
+                version: releaseData.version,
+                release_date: releaseData.release_date,
+                features: featuresResult.rows
+            }
         });
-    });
+    } catch (err) {
+        console.error('Error fetching release:', err);
+        res.status(500).render('error', { message: 'Failed to load release' });
+    }
 });
 
 module.exports = router; 

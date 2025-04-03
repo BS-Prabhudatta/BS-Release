@@ -394,7 +394,9 @@ For support, please open an issue in the repository or contact the maintainers.
 
 ```
 bs-release/
-├── db/                 # Database files
+├── db/                 # Database configuration
+│   ├── config.js      # Database configuration
+│   └── init.js        # Database initialization
 ├── logs/              # Application logs
 ├── public/            # Static files
 ├── routes/            # Route handlers
@@ -410,6 +412,11 @@ bs-release/
 - `PORT`: Application port (default: 3000)
 - `SESSION_SECRET`: Session secret key
 - `DB_PATH`: Path to SQLite database file
+- `PGDATABASE`: PostgreSQL database name (default: releases_db)
+- `PGUSER`: PostgreSQL username
+- `PGPASSWORD`: PostgreSQL password
+- `PGHOST`: PostgreSQL host (default: localhost)
+- `PGPORT`: PostgreSQL port (default: 5432)
 
 ## Security Considerations
 
