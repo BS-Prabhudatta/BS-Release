@@ -79,8 +79,8 @@ writeFile('.env', envContent);
 // Install dependencies
 runCommand('npm install', 'Installing Node.js dependencies');
 
-// Initialize database schema by starting the app briefly
-runCommand('npm start & sleep 5 && pkill node', 'Initializing database schema');
+// Initialize database schema using db/init.js
+runCommand('node db/init.js', 'Initializing database schema');
 
 // 4. Service Management
 runCommand('sudo npm install -g pm2', 'Installing PM2 globally');
@@ -92,7 +92,7 @@ runCommand(
 // 5. Nginx Configuration
 const nginxConfig = `server {
     listen 80;
-    server_name release.brandsystems.com;
+    server_name release.brandsystems.com 54.169.197.211;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -120,9 +120,10 @@ runCommand('sudo apt install -y certbot python3-certbot-nginx', 'Installing Cert
 console.log('\n🎉 Deployment completed successfully!\n');
 console.log('Next steps:');
 console.log('1. Set up DNS in Route 53:');
-console.log('   - Create an A record for release.brandsystems.com pointing to your instance\'s static IP');
+console.log('   - Create an A record for release.brandsystems.com pointing to 54.169.197.211');
 console.log('   - Wait for DNS propagation (usually 5-10 minutes)\n');
 console.log('2. Configure HTTPS with Certbot:');
 console.log('   Run: sudo certbot --nginx -d release.brandsystems.com\n');
 console.log('3. Test your application:');
-console.log('   Visit: https://release.brandsystems.com\n');
+console.log('   - Via domain: https://release.brandsystems.com');
+console.log('   - Via IP: http://54.169.197.211 (HTTPS after Certbot setup)\n');

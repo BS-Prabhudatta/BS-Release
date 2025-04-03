@@ -172,7 +172,15 @@ const initDb = async () => {
 };
 
 // Initialize the database
-const initPromise = initDb();
+const initPromise = initDb().then(async () => {
+    await pool.end(); // Close the pool
+    console.log('Database connection closed');
+    process.exit(0); // Exit successfully
+}).catch(async (err) => {
+    await pool.end(); // Close the pool on error
+    console.error('Initialization failed');
+    process.exit(1); // Exit with error
+});
 
 // Export the database connection and initialization promise
 module.exports = {
