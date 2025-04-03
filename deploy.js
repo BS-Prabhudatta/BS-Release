@@ -32,42 +32,38 @@ function writeFile(filePath, content) {
 console.log('\n🌟 Starting deployment of Release Management System...\n');
 
 // 1. System Updates and Package Installation
-runCommand('sudo apt update && sudo apt upgrade -y', 
-    'Updating system packages');
+runCommand('sudo apt update && sudo apt upgrade -y', 'Updating system packages');
 
 // Install Node.js 20.x
-runCommand(`
-    sudo apt-get install -y ca-certificates curl gnupg &&
-    sudo mkdir -p /etc/apt/keyrings &&
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg &&
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list &&
-    sudo apt-get update && sudo apt-get install -y nodejs
-`, 'Installing Node.js 20.x');
+runCommand(
+    'curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs',
+    'Installing Node.js 20.x'
+);
 
 // Install PostgreSQL 17
-runCommand(`
-    sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' &&
-    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - &&
-    sudo apt-get update &&
-    sudo apt-get install -y postgresql-17
-`, 'Installing PostgreSQL 17');
+runCommand(
+    'sudo sh -c \'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list\' && ' +
+    'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && ' +
+    'sudo apt update && sudo apt install -y postgresql-17',
+    'Installing PostgreSQL 17'
+);
 
 // Install Git and Nginx
-runCommand('sudo apt install -y git nginx', 
-    'Installing Git and Nginx');
+runCommand('sudo apt install -y git nginx', 'Installing Git and Nginx');
 
 // 2. PostgreSQL Configuration
-runCommand(`
-    sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'brand123';" &&
-    sudo -u postgres psql -c "CREATE DATABASE releases_db;"
-`, 'Configuring PostgreSQL user and database');
+runCommand(
+    'echo "ALTER USER postgres WITH PASSWORD \'brand123\';\n' +
+    'CREATE DATABASE releases_db;" | sudo -u postgres psql',
+    'Configuring PostgreSQL user and database'
+);
 
 // Update pg_hba.conf
-const pgHbaPath = '/etc/postgresql/17/main/pg_hba.conf';
-runCommand(`
-    sudo sed -i '/^host.*all.*all.*127.0.0.1\\/32.*ident/c\\host    all             all             127.0.0.1/32            md5' ${pgHbaPath} &&
-    sudo systemctl restart postgresql
-`, 'Updating PostgreSQL access configuration');
+runCommand(
+    'echo "host    all             all             127.0.0.1/32            md5" | sudo tee -a /etc/postgresql/17/main/pg_hba.conf',
+    'Updating PostgreSQL access configuration'
+);
+runCommand('sudo systemctl restart postgresql', 'Restarting PostgreSQL service');
 
 // 3. Application Setup
 // Create .env file
@@ -78,32 +74,20 @@ PGPASSWORD=brand123
 PGPORT=5432
 NODE_ENV=production
 PORT=3000`;
-
 writeFile('.env', envContent);
 
 // Install dependencies
-runCommand('npm install', 
-    'Installing Node.js dependencies');
+runCommand('npm install', 'Installing Node.js dependencies');
 
 // Initialize database schema by starting the app briefly
-console.log('\n🚀 Starting: Initializing database schema...');
-try {
-    const app = execSync('node server.js', { timeout: 5000 });
-    console.log('✅ Completed: Database schema initialized');
-} catch (error) {
-    // Expected to timeout after schema initialization
-    console.log('✅ Completed: Database schema initialized');
-}
+runCommand('npm start & sleep 5 && pkill node', 'Initializing database schema');
 
 // 4. Service Management
-runCommand('sudo npm install -g pm2',
-    'Installing PM2 globally');
-
-runCommand(`
-    pm2 start server.js --name release-management &&
-    pm2 save &&
-    sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ${process.env.USER} --hp ${process.env.HOME}
-`, 'Configuring PM2 and setting up auto-start');
+runCommand('sudo npm install -g pm2', 'Installing PM2 globally');
+runCommand(
+    'pm2 start server.js --name release-management && pm2 save && pm2 startup',
+    'Configuring PM2 and setting up auto-start'
+);
 
 // 5. Nginx Configuration
 const nginxConfig = `server {
@@ -119,31 +103,26 @@ const nginxConfig = `server {
         proxy_cache_bypass $http_upgrade;
     }
 }`;
-
-runCommand(`
-    sudo tee /etc/nginx/sites-available/release.brandsystems.com > /dev/null << 'EOF'
-${nginxConfig}
-EOF
-`, 'Creating Nginx configuration');
-
-runCommand(`
-    sudo ln -sf /etc/nginx/sites-available/release.brandsystems.com /etc/nginx/sites-enabled/ &&
-    sudo nginx -t &&
-    sudo systemctl restart nginx
-`, 'Enabling Nginx configuration');
+runCommand(
+    `sudo tee /etc/nginx/sites-available/release.brandsystems.com > /dev/null << 'EOF'\n${nginxConfig}\nEOF`,
+    'Creating Nginx configuration'
+);
+runCommand(
+    'sudo ln -sf /etc/nginx/sites-available/release.brandsystems.com /etc/nginx/sites-enabled/ && ' +
+    'sudo nginx -t && sudo systemctl restart nginx',
+    'Enabling Nginx configuration'
+);
 
 // 6. Install Certbot
-runCommand('sudo apt install -y certbot python3-certbot-nginx',
-    'Installing Certbot');
+runCommand('sudo apt install -y certbot python3-certbot-nginx', 'Installing Certbot');
 
 // Final instructions
 console.log('\n🎉 Deployment completed successfully!\n');
 console.log('Next steps:');
 console.log('1. Set up DNS in Route 53:');
-console.log('   - Create an A record for release.brandsystems.com pointing to your instance\'s IP');
+console.log('   - Create an A record for release.brandsystems.com pointing to your instance\'s static IP');
 console.log('   - Wait for DNS propagation (usually 5-10 minutes)\n');
 console.log('2. Configure HTTPS with Certbot:');
 console.log('   Run: sudo certbot --nginx -d release.brandsystems.com\n');
 console.log('3. Test your application:');
-console.log('   Visit: http://release.brandsystems.com\n');
-console.log('Note: After DNS propagation and Certbot setup, your site will be available via HTTPS\n'); 
+console.log('   Visit: https://release.brandsystems.com\n');
