@@ -85,8 +85,8 @@ runCommand('node db/init.js', 'Initializing database schema');
 // 4. Service Management
 runCommand('sudo npm install -g pm2', 'Installing PM2 globally');
 runCommand(
-    'pm2 start server.js --name release-management && pm2 save && pm2 startup',
-    'Configuring PM2 and setting up auto-start'
+    'sudo pm2 start server.js --name release-management && pm2 save && pm2 startup',
+    'Starting app with PM2'
 );
 
 // 5. Nginx Configuration
@@ -104,7 +104,7 @@ const nginxConfig = `server {
     }
 }`;
 runCommand(
-    `sudo tee /etc/nginx/sites-available/release.brandsystems.com > /dev/null << 'EOF'\n${nginxConfig}\nEOF`,
+    `sudo tee /etc/nginx/sites-available/release;brandsystems.com > /dev/null << 'EOF'\n${nginxConfig}\nEOF`,
     'Creating Nginx configuration'
 );
 runCommand(

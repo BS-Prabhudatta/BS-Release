@@ -60,7 +60,6 @@ const initDb = async () => {
             }
         ];
 
-        // Insert products using a single query with ON CONFLICT DO NOTHING
         for (const product of products) {
             await query(
                 'INSERT INTO products (slug, name, description) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING',
@@ -70,7 +69,6 @@ const initDb = async () => {
 
         // Sample releases data
         const releases = [
-            // Marcom releases
             {
                 product_slug: 'marcom',
                 version: '2.1.0',
@@ -86,7 +84,6 @@ const initDb = async () => {
                     }
                 ]
             },
-            // Add other releases here...
             {
                 product_slug: 'collaborate',
                 version: '1.0.0',
@@ -110,20 +107,16 @@ const initDb = async () => {
                     {
                         title: 'Advanced Analytics Dashboard',
                         content: '<p>New analytics dashboard with customizable widgets and real-time data visualization.</p><ul><li>Custom report builder</li><li>Interactive charts</li><li>Export capabilities</li></ul>'
-                    },
-                    
+                    }
                 ]
-            }   
+            }
         ];
 
-        // Insert releases and features using transactions
         for (const release of releases) {
             const client = await pool.connect();
-            
             try {
                 await client.query('BEGIN');
 
-                // Get product id
                 const productResult = await client.query(
                     'SELECT id FROM products WHERE slug = $1',
                     [release.product_slug]
@@ -137,7 +130,6 @@ const initDb = async () => {
 
                 const productId = productResult.rows[0].id;
 
-                // Insert release
                 const releaseResult = await client.query(
                     'INSERT INTO releases (product_id, version, release_date) VALUES ($1, $2, $3) ON CONFLICT (product_id, version) DO NOTHING RETURNING id',
                     [productId, release.version, release.release_date]
@@ -146,7 +138,6 @@ const initDb = async () => {
                 if (releaseResult.rows.length > 0) {
                     const releaseId = releaseResult.rows[0].id;
 
-                    // Insert features
                     for (const feature of release.features) {
                         await client.query(
                             'INSERT INTO features (release_id, title, content) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
@@ -171,20 +162,9 @@ const initDb = async () => {
     }
 };
 
-// Initialize the database
-const initPromise = initDb().then(async () => {
-    await pool.end(); // Close the pool
-    console.log('Database connection closed');
-    process.exit(0); // Exit successfully
-}).catch(async (err) => {
-    await pool.end(); // Close the pool on error
-    console.error('Initialization failed');
-    process.exit(1); // Exit with error
-});
-
-// Export the database connection and initialization promise
+// Export the initialization function (not called here)
 module.exports = {
     query,
     pool,
-    initPromise
-}; 
+    initPromise: initDb()
+};
